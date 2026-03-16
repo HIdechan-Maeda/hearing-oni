@@ -154,15 +154,22 @@ export default function LogsPage() {
 
       {!loading && rawLogs.length > 0 && (
         <p style={{ marginBottom: 12 }}>
-          <label style={{ marginRight: 8, color: "#000" }}>表示:</label>
+          <label style={{ marginRight: 8, color: "#fff" }}>表示:</label>
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value as FilterType)}
-            style={{ padding: "6px 10px", fontSize: 14, borderRadius: 6, border: "1px solid #999" }}
+            style={{
+              padding: "6px 10px",
+              fontSize: 14,
+              borderRadius: 6,
+              border: "1px solid #999",
+              background: "#333",
+              color: "#fff",
+            }}
           >
-            <option value="all">すべて</option>
-            <option value="core">CORE</option>
-            <option value="oni">鬼問題</option>
+            <option value="all" style={{ color: "#000" }}>すべて</option>
+            <option value="core" style={{ color: "#000" }}>CORE</option>
+            <option value="oni" style={{ color: "#000" }}>鬼問題</option>
           </select>
         </p>
       )}
