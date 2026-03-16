@@ -1,0 +1,19 @@
+export type QuestionCore = {
+  id: string;
+  // 難易度（core / oni など）。過去データとの互換性のため null 許可
+  difficulty?: string | null;
+  /** 問題文の上に表示する図のURL（Supabase Storage や外部URL） */
+  image_url?: string | null;
+  stem: string;
+  choice_a: string;
+  choice_b: string;
+  choice_c: string;
+  choice_d: string;
+  choice_e: string;
+  answer: "A" | "B" | "C" | "D" | "E";
+  explain: string | null;
+  tags_raw: string | null;
+};
+
+export type Confidence = "easy" | "ok" | "hard";
+export type Choice = "A" | "B" | "C" | "D" | "E";
