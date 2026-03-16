@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
-import type { Choice, Confidence, QuestionCore } from "../../types";
+import type { Choice, QuestionCore } from "../../types";
 import Link from "next/link";
 
 type Stage = "loading" | "quiz" | "feedback" | "done";
@@ -35,7 +35,6 @@ function SessionPageInner() {
 
   const [selected, setSelected] = useState<Choice | null>(null);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
-  const [confidence, setConfidence] = useState<Confidence>("ok");
 
   const [startAt, setStartAt] = useState<number>(Date.now());
   const [msg, setMsg] = useState<string>("");
@@ -119,7 +118,6 @@ function SessionPageInner() {
       setIdx(0);
       setSelected(null);
       setIsCorrect(null);
-      setConfidence("ok");
       setStartAt(Date.now());
       setStage("quiz");
     };
@@ -164,7 +162,7 @@ function SessionPageInner() {
       question_id: q.id,
       selected: choice,
       is_correct: ok,
-      confidence,
+      confidence: null,
       time_spent_sec: timeSpent,
       tags_raw: tagsRaw,
       kc_ids_raw: "",
@@ -173,7 +171,7 @@ function SessionPageInner() {
 
     if (logErr) setMsg("ログ保存エラー: " + logErr.message);
 
-    const shouldReview = !ok || confidence === "hard";
+    const shouldReview = !ok;
     if (shouldReview) {
       // 復習はB運用：予定も表示されるので、翌日/3日後でOK
       const next = nextReviewAt(!ok ? "wrong" : "hard");
@@ -194,7 +192,6 @@ function SessionPageInner() {
     setMsg("");
     setSelected(null);
     setIsCorrect(null);
-    setConfidence("ok");
     setStartAt(Date.now());
 
     if (idx + 1 >= questions.length) {
@@ -279,25 +276,6 @@ function SessionPageInner() {
                 {v}
               </button>
             ))}
-          </div>
-
-          <div style={{ marginTop: 14 }}>
-            <div style={{ marginBottom: 6, color: "#000" }}>自信度</div>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              {(["easy","ok","hard"] as Confidence[]).map(c => (
-                <button
-                  key={c}
-                  onClick={() => setConfidence(c)}
-                  style={{
-                    ...pill,
-                    borderColor: confidence === c ? "#000" : "#ccc",
-                    fontWeight: confidence === c ? 700 : 400,
-                  }}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
           </div>
         </>
       )}

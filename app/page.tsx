@@ -114,6 +114,25 @@ export default function HomePage() {
     if (error) setMsg("ログイン失敗: " + error.message);
   };
 
+  const signUp = async () => {
+    setMsg("");
+    const trimmed = email.trim();
+    if (!trimmed.endsWith("@hoku-iryo-u.ac.jp")) {
+      setMsg("新規登録は学内メールアドレス（@hoku-iryo-u.ac.jp）のみ利用できます。");
+      return;
+    }
+    if (!password) {
+      setMsg("パスワードを入力してください。");
+      return;
+    }
+    const { error } = await supabase.auth.signUp({ email: trimmed, password });
+    if (error) {
+      setMsg("新規登録失敗: " + error.message);
+    } else {
+      setMsg("仮登録しました。メールに届く案内を確認してください。");
+    }
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
   };
@@ -160,6 +179,7 @@ export default function HomePage() {
 
           <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
             <button onClick={signIn} style={btnStyle}>ログイン</button>
+            <button onClick={signUp} style={btnStyle}>新規登録</button>
           </div>
 
           {msg && <p style={{ color: "#b00" }}>{msg}</p>}
