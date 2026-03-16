@@ -153,39 +153,77 @@ export default function HomePage() {
   }, [questionCount]);
 
   return (
-    <main style={{ maxWidth: 720, margin: "0 auto", padding: 16 }}>
-      <h1 style={{ marginTop: 8 }}>聴覚・音響の鬼 (MVP)</h1>
-
+    <main
+      style={{
+        minHeight: "100dvh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 16,
+        background: "linear-gradient(145deg, #0b315b, #1c7ed6)",
+      }}
+    >
       {!userEmail ? (
-        <section style={{ padding: 12, border: "1px solid #ddd", borderRadius: 12 }}>
-          <h2 style={{ marginTop: 0 }}>ログイン（メール＋パスワード）</h2>
+        <section
+          style={{
+            width: "100%",
+            maxWidth: 420,
+            padding: 24,
+            borderRadius: 20,
+            background: "rgba(255,255,255,0.96)",
+            boxShadow: "0 18px 45px rgba(0,0,0,0.35)",
+          }}
+        >
+          <div style={{ textAlign: "center", marginBottom: 18 }}>
+            <img
+              src="/choukaku-oni-512.png"
+              alt="聴覚の鬼ロゴ"
+              style={{ width: 80, height: 80, borderRadius: 20, marginBottom: 8 }}
+            />
+            <h1 style={{ margin: 0, fontSize: 24 }}>聴覚・音響の鬼</h1>
+            <p style={{ margin: "4px 0 0", fontSize: 13, color: "#555" }}>
+              学内メールで新規登録してからログインしてください。
+            </p>
+          </div>
 
-          <label style={{ display: "block", marginTop: 8, color: "#000" }}>Email</label>
+          <label style={{ display: "block", marginTop: 8, color: "#000", fontSize: 14 }}>Email（@hoku-iryo-u.ac.jp）</label>
           <input
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="student@example.com"
-            style={{ width: "100%", padding: 10, fontSize: 16, boxSizing: "border-box" }}
+            placeholder="student@hoku-iryo-u.ac.jp"
+            style={{ width: "100%", padding: 10, fontSize: 16, boxSizing: "border-box", borderRadius: 10, border: "1px solid #ccc" }}
           />
 
-          <label style={{ display: "block", marginTop: 10, color: "#000" }}>Password</label>
+          <label style={{ display: "block", marginTop: 10, color: "#000", fontSize: 14 }}>Password</label>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="password"
-            style={{ width: "100%", padding: 10, fontSize: 16, boxSizing: "border-box" }}
+            style={{ width: "100%", padding: 10, fontSize: 16, boxSizing: "border-box", borderRadius: 10, border: "1px solid #ccc" }}
           />
 
-          <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-            <button onClick={signIn} style={btnStyle}>ログイン</button>
-            <button onClick={signUp} style={btnStyle}>新規登録</button>
+          <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+            <button onClick={signIn} style={{ ...btnStyle, flex: 1 }}>ログイン</button>
+            <button onClick={signUp} style={{ ...btnStyle, flex: 1, background: "#0b4f9c", color: "#fff", borderColor: "#0b4f9c" }}>
+              新規登録
+            </button>
           </div>
 
-          {msg && <p style={{ color: "#b00" }}>{msg}</p>}
+          {msg && <p style={{ color: "#b00", marginTop: 10, whiteSpace: "pre-wrap" }}>{msg}</p>}
         </section>
       ) : (
-        <section style={{ padding: 12, border: "1px solid #ddd", borderRadius: 12 }}>
+        <section
+          style={{
+            width: "100%",
+            maxWidth: 720,
+            padding: 24,
+            borderRadius: 20,
+            background: "rgba(255,255,255,0.98)",
+            boxShadow: "0 18px 45px rgba(0,0,0,0.25)",
+          }}
+        >
+          <h1 style={{ marginTop: 0, marginBottom: 8 }}>聴覚・音響の鬼 (MVP)</h1>
           <p style={{ marginTop: 0 }}>
             ログイン中：<b>{userEmail}</b>
           </p>
@@ -245,11 +283,6 @@ export default function HomePage() {
           </div>
         </section>
       )}
-
-      <hr style={{ margin: "18px 0" }} />
-      <p style={{ color: "#000" }}>
-        MVP: 領域選択 → 出題 → 採点 → logs保存 → 復習キュー。
-      </p>
     </main>
   );
 }

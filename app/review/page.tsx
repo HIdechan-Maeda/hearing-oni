@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
-import type { QuestionCore, Choice, Confidence } from "../../types";
+import type { QuestionCore, Choice } from "../../types";
 import Link from "next/link";
 
 type ReviewRow = {
@@ -19,7 +19,6 @@ export default function ReviewPage() {
   const [active, setActive] = useState<ReviewRow | null>(null);
   const [selected, setSelected] = useState<Choice | null>(null);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
-  const [confidence, setConfidence] = useState<Confidence>("ok");
   const [startAt, setStartAt] = useState<number>(Date.now());
 
   useEffect(() => {
@@ -76,7 +75,6 @@ export default function ReviewPage() {
     setActive(it);
     setSelected(null);
     setIsCorrect(null);
-    setConfidence("ok");
     setStartAt(Date.now());
     setMsg("");
   };
@@ -101,7 +99,7 @@ export default function ReviewPage() {
       question_id: q.id,
       selected: choice,
       is_correct: ok,
-      confidence,
+      confidence: null,
       time_spent_sec: timeSpent,
       tags_raw: q.tags_raw ?? "",
       kc_ids_raw: "",
@@ -109,17 +107,17 @@ export default function ReviewPage() {
     });
     if (logErr) setMsg("ログ保存エラー: " + logErr.message);
 
-    // 復習更新：正解easy/okならキューから削除、hard or 不正解なら延期
-    if (ok && confidence !== "hard") {
+    // 復習更新：正解ならキューから削除、不正解なら延期
+    if (ok) {
       await supabase.from("review_queue").delete().eq("question_id", q.id);
     } else {
       const next = new Date();
-      next.setDate(next.getDate() + (!ok ? 1 : 3));
+      next.setDate(next.getDate() + 1);
       await supabase.from("review_queue").upsert(
         {
           user_id: user.id,
           question_id: q.id,
-          reason: !ok ? "wrong" : "hard",
+          reason: "wrong",
           next_review_at: next.toISOString(),
         },
         { onConflict: "user_id,question_id" }
@@ -217,24 +215,6 @@ export default function ReviewPage() {
                     ))}
                   </div>
 
-                  <div style={{ marginTop: 14 }}>
-                    <div style={{ marginBottom: 6, color: "#000" }}>自信度</div>
-                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                      {(["easy","ok","hard"] as Confidence[]).map((c) => (
-                        <button
-                          key={c}
-                          onClick={() => setConfidence(c)}
-                          style={{
-                            ...btn,
-                            borderColor: confidence === c ? "#000" : "#ccc",
-                            fontWeight: confidence === c ? 700 : 400,
-                          }}
-                        >
-                          {c}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
                 </>
               ) : (
                 <>
