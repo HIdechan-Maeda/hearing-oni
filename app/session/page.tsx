@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+export const dynamic = "force-dynamic";
+
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import type { Choice, Confidence, QuestionCore } from "../../types";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 
 type Stage = "loading" | "quiz" | "feedback" | "done";
 
@@ -23,13 +24,10 @@ const DOMAIN_KEYWORDS: Record<string, string[]> = {
   disease: ["desease", "disease", "byouki", "病気", "complex", "統合"],
 };
 
-export default function SessionPage() {
-  const sp = useSearchParams();
-  const domain = (sp.get("domain") ?? "all").trim(); // "all" or tag keyword
-  const mode = (sp.get("mode") ?? "").trim(); // "" or "oni"
-  const rawCount = Number(sp.get("count") ?? "10");
-  const questionCount: 5 | 10 | 20 =
-    rawCount === 5 || rawCount === 10 || rawCount === 20 ? (rawCount as 5 | 10 | 20) : 10;
+function SessionPageInner() {
+  const [domain, setDomain] = useState<string>("all");
+  const [mode, setMode] = useState<string>("");
+  const [questionCount, setQuestionCount] = useState<5 | 10 | 20>(10);
 
   const [stage, setStage] = useState<Stage>("loading");
   const [questions, setQuestions] = useState<QuestionCore[]>([]);
@@ -43,6 +41,20 @@ export default function SessionPage() {
   const [msg, setMsg] = useState<string>("");
 
   const q = questions[idx];
+
+  // 初回マウント時に URL からクエリパラメータを読む（useSearchParams を使わない）
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    const d = (sp.get("domain") ?? "all").trim();
+    const m = (sp.get("mode") ?? "").trim();
+    const rawCount = Number(sp.get("count") ?? "10");
+    const qc: 5 | 10 | 20 =
+      rawCount === 5 || rawCount === 10 || rawCount === 20 ? (rawCount as 5 | 10 | 20) : 10;
+    setDomain(d || "all");
+    setMode(m);
+    setQuestionCount(qc);
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -305,6 +317,14 @@ export default function SessionPage() {
       <hr style={{ margin: "18px 0" }} />
       <Link href="/" style={linkStyle}>ホームへ</Link>
     </main>
+  );
+}
+
+export default function SessionPage() {
+  return (
+    <Suspense fallback={<main style={wrap}><p>読み込み中...</p></main>}>
+      <SessionPageInner />
+    </Suspense>
   );
 }
 
