@@ -42,6 +42,7 @@ export default function HomePage() {
   const [nickname, setNickname] = useState<string>("");
   const [nicknameSaving, setNicknameSaving] = useState(false);
   const [questionCount, setQuestionCount] = useState<5 | 10 | 20>(10);
+  const [isTeacher, setIsTeacher] = useState(false);
 
   useEffect(() => {
     const savedDomain = window.localStorage.getItem("hearing_oni_domain");
@@ -68,17 +69,34 @@ export default function HomePage() {
   useEffect(() => {
     if (!userEmail) {
       setNickname("");
+      setIsTeacher(false);
       return;
     }
     const loadProfile = async () => {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
-      const { data: profile } = await supabase
+      const user = userData.user;
+
+      // プロフィールがなければ、Auth の email だけでも保存しておく
+      const { data: profile, error } = await supabase
         .from("profiles")
-        .select("name")
-        .eq("user_id", userData.user.id)
+        .select("name,role,email")
+        .eq("user_id", user.id)
         .maybeSingle();
+
+      if (!profile || error) {
+        await supabase.from("profiles").upsert(
+          {
+            user_id: user.id,
+            email: user.email ?? "",
+            name: profile?.name ?? null,
+          },
+          { onConflict: "user_id" }
+        );
+      }
+
       setNickname((profile?.name ?? "") || "");
+      setIsTeacher((profile?.role ?? "") === "teacher");
     };
     loadProfile();
   }, [userEmail]);
@@ -255,9 +273,6 @@ export default function HomePage() {
                 <option key={d.key} value={d.key}>{d.label}</option>
               ))}
             </select>
-            <div style={{ color: "#000", marginTop: 6, fontSize: 13 }}>
-              ※ questions_core.tags_raw に該当タグが入っている問題だけを出題します。
-            </div>
           </div>
           <div style={{ marginTop: 4, marginBottom: 12 }}>
             <div style={{ color: "#000", marginBottom: 6 }}>1セットの出題数</div>
@@ -274,11 +289,13 @@ export default function HomePage() {
 
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <Link href={sessionHref} style={linkBtnStyle}>基本修行</Link>
-            <Link href={oniSessionHref} style={linkBtnStyle}>鬼問題モード</Link>
+            <Link href={oniSessionHref} style={linkBtnStyle}>試練モード</Link>
             <Link href="/review" style={linkBtnStyle}>復習（キュー）</Link>
             <Link href="/logs" style={linkBtnStyle}>日々の学習成果</Link>
             <Link href="/dashboard" style={linkBtnStyle}>正答率グラフ</Link>
-            <Link href="/teacher" style={linkBtnStyle}>教師ダッシュボード</Link>
+            {isTeacher && (
+              <Link href="/teacher" style={linkBtnStyle}>教師ダッシュボード</Link>
+            )}
             <button onClick={signOut} style={btnStyle}>ログアウト</button>
           </div>
         </section>
