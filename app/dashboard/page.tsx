@@ -14,7 +14,8 @@ type DomainKey =
   | "evoked"
   | "vestibular"
   | "disease"
-  | "information_support";
+  | "information_support"
+  | "development";
 
 const DOMAIN_OPTIONS: Array<{ key: DomainKey; label: string }> = [
   { key: "anatomy", label: "解剖" },
@@ -26,6 +27,7 @@ const DOMAIN_OPTIONS: Array<{ key: DomainKey; label: string }> = [
   { key: "evoked", label: "電気生理" },
   { key: "vestibular", label: "前庭" },
   { key: "disease", label: "病気・統合問題" },
+  { key: "development", label: "療育・発達" },
   { key: "information_support", label: "情報保障" },
 ];
 
@@ -39,6 +41,7 @@ const DOMAIN_KEYWORDS: Record<DomainKey, string[]> = {
   hearing_aids: ["hearing_aids", "hearing_aid"],
   evoked: ["evoked", "abr", "assr"],
   vestibular: ["vestibular"],
+  development: ["development"],
   information_support: ["information"],
   disease: ["desease", "disease", "byouki", "病気", "complex", "統合"],
 };

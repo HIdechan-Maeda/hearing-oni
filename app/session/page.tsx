@@ -20,6 +20,7 @@ const DOMAIN_KEYWORDS: Record<string, string[]> = {
   evoked: ["evoked", "abr", "assr"],
   vestibular: ["vestibular"],
   information_support: ["information"],
+  development: ["development"],
   // 病気・統合問題
   disease: ["desease", "disease", "byouki", "病気", "complex", "統合"],
 };

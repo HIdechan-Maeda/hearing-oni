@@ -12,7 +12,8 @@ type DomainKey =
   | "audiometry"
   | "hearing_aids"
   | "evoked"
-  | "vestibular";
+  | "vestibular"
+  | "development";
 
 const DOMAIN_OPTIONS: Array<{ key: DomainKey; label: string }> = [
   { key: "anatomy", label: "解剖（anatomy）" },
@@ -23,6 +24,7 @@ const DOMAIN_OPTIONS: Array<{ key: DomainKey; label: string }> = [
   { key: "hearing_aids", label: "補聴器（hearing_aids）" },
   { key: "evoked", label: "電気生理（evoked）" },
   { key: "vestibular", label: "前庭（vestibular）" },
+  { key: "development", label: "療育・発達（development）" },
 ];
 
 type DomainStat = {

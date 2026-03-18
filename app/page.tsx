@@ -15,7 +15,8 @@ type DomainKey =
   | "evoked"
   | "vestibular"
   | "disease"
-  | "information_support";
+  | "information_support"
+  | "development";
 
 const DOMAIN_OPTIONS: Array<{ key: DomainKey; label: string }> = [
   { key: "all", label: "全領域（ランダム）" },
@@ -29,6 +30,7 @@ const DOMAIN_OPTIONS: Array<{ key: DomainKey; label: string }> = [
   { key: "vestibular", label: "前庭（vestibular）" },
   { key: "disease", label: "病気・統合問題（disease）" },
   { key: "information_support", label: "情報保障（information support）" },
+  { key: "development", label: "療育・発達（development）" },
 ];
 
 export default function HomePage() {
