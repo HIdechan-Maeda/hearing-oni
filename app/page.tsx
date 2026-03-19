@@ -172,6 +172,8 @@ export default function HomePage() {
     return `/session?${params.toString()}`;
   }, [questionCount]);
 
+  const recentWrongHref = "/session?mode=recent_wrong&count=10";
+
   return (
     <main
       style={{
@@ -292,6 +294,7 @@ export default function HomePage() {
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <Link href={sessionHref} style={linkBtnStyle}>基本修行</Link>
             <Link href={oniSessionHref} style={linkBtnStyle}>試練モード</Link>
+            <Link href={recentWrongHref} style={linkBtnStyle}>直近1週間の間違えた問題</Link>
             <Link href="/review" style={linkBtnStyle}>復習（キュー）</Link>
             <Link href="/logs" style={linkBtnStyle}>日々の学習成果</Link>
             <Link href="/dashboard" style={linkBtnStyle}>正答率グラフ</Link>

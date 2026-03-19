@@ -66,9 +66,70 @@ function SessionPageInner() {
         return;
       }
 
+      // 直近1週間の「間違えた問題」モード
+      if (mode === "recent_wrong") {
+        const userId = sess.session.user.id;
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+        const { data: wrongLogs, error: wrongErr } = await supabase
+          .from("logs")
+          .select("question_id,answered_at")
+          .eq("user_id", userId)
+          .eq("is_correct", false)
+          .gte("answered_at", sevenDaysAgo.toISOString())
+          .order("answered_at", { ascending: false })
+          .limit(200);
+
+        if (wrongErr) {
+          setMsg("復習用ログ取得エラー: " + wrongErr.message);
+          return;
+        }
+
+        const ids = Array.from(
+          new Set((wrongLogs ?? []).map((l) => l.question_id).filter(Boolean))
+        );
+
+        if (ids.length === 0) {
+          setMsg("直近1週間で間違えた問題がありません。");
+          return;
+        }
+
+        const { data: qs, error: qerr } = await supabase
+          .from("questions_core")
+          .select(
+            "id,difficulty,image_url,stem,choice_a,choice_b,choice_c,choice_d,choice_e,answer,explain,tags_raw"
+          )
+          .in("id", ids)
+          .limit(200);
+
+        if (qerr) {
+          setMsg("問題取得エラー: " + qerr.message);
+          return;
+        }
+
+        const pool = (qs ?? []) as QuestionCore[];
+        if (pool.length === 0) {
+          setMsg("直近1週間で間違えた問題が見つかりません。");
+          return;
+        }
+
+        const picked = shuffle(pool).slice(0, questionCount);
+        setQuestions(picked);
+        setIdx(0);
+        setSelected(null);
+        setIsCorrect(null);
+        setStartAt(Date.now());
+        setStage("quiz");
+        return;
+      }
+
+      // 通常の出題（基本修行 / 試練）
       const { data, error } = await supabase
         .from("questions_core")
-        .select("id,difficulty,image_url,stem,choice_a,choice_b,choice_c,choice_d,choice_e,answer,explain,tags_raw")
+        .select(
+          "id,difficulty,image_url,stem,choice_a,choice_b,choice_c,choice_d,choice_e,answer,explain,tags_raw"
+        )
         .limit(500);
 
       if (error) {
@@ -209,7 +270,13 @@ function SessionPageInner() {
         <p style={{ marginBottom: 12 }}>
           <Link href="/" style={backLinkStyle}>← ホームへ</Link>
         </p>
-        <h1>{mode === "oni" ? `試練（${questionCount}問）` : `基本修行（${questionCount}問）`}</h1>
+        <h1>
+          {mode === "oni"
+            ? `試練（${questionCount}問）`
+            : mode === "recent_wrong"
+            ? `直近1週間の間違えた問題（${questionCount}問）`
+            : `基本修行（${questionCount}問）`}
+        </h1>
         <p>{msg || "読み込み中..."}</p>
         <Link href="/" style={linkStyle}>ホームへ</Link>
       </main>
@@ -247,6 +314,8 @@ function SessionPageInner() {
         <h1 style={{ marginBottom: 8 }}>
           {mode === "oni"
             ? `試練（${questionCount}問）`
+            : mode === "recent_wrong"
+            ? `直近1週間の間違えた問題（${questionCount}問）`
             : `基本修行（${questionCount}問）`}
         </h1>
         <div style={{ color: "#000" }}>
