@@ -51,6 +51,50 @@ function saveLastSessionQuestionIds(ids: string[]) {
   }
 }
 
+function SessionProgressBar({ current, total }: { current: number; total: number }) {
+  const safeTotal = Math.max(1, total);
+  const pct = Math.min(100, (100 * Math.min(current, safeTotal)) / safeTotal);
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 8,
+          fontSize: 13,
+          color: "#333",
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        <span style={{ fontWeight: 600, color: "#0b315b" }}>進捗</span>
+        <span>
+          {current} / {total} 問
+        </span>
+      </div>
+      <div
+        style={{
+          height: 10,
+          borderRadius: 999,
+          background: "#e8eef5",
+          overflow: "hidden",
+          boxShadow: "inset 0 1px 2px rgba(0,0,0,0.06)",
+        }}
+      >
+        <div
+          style={{
+            height: "100%",
+            width: `${pct}%`,
+            borderRadius: 999,
+            background: "linear-gradient(90deg, #3d9aed, #0b4f9c)",
+            transition: "width 0.4s ease",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function SessionPageInner() {
   const [domain, setDomain] = useState<string>("all");
   const [mode, setMode] = useState<string>("");
@@ -300,31 +344,46 @@ function SessionPageInner() {
         <p style={{ marginBottom: 12 }}>
           <Link href="/" style={backLinkStyle}>← ホームへ</Link>
         </p>
-        <h1>
+        <h1 style={{ color: "#0b315b", fontSize: 22 }}>
           {mode === "oni"
             ? `試練（${questionCount}問）`
             : mode === "recent_wrong"
             ? `直近1週間の間違えた問題（${questionCount}問）`
             : `基本修行（${questionCount}問）`}
         </h1>
-        <p>{msg || "読み込み中..."}</p>
+        <SessionProgressBar current={0} total={questionCount} />
+        <p style={{ lineHeight: 1.6 }}>{msg || "読み込み中..."}</p>
         <Link href="/" style={linkStyle}>ホームへ</Link>
       </main>
     );
   }
 
   if (stage === "done") {
+    const n = questions.length || questionCount;
     return (
       <main style={wrap}>
         <p style={{ marginBottom: 12 }}>
           <Link href="/" style={backLinkStyle}>← ホームへ</Link>
         </p>
-        <h1>完了</h1>
-        <p>
-          {questionCount}問おつかれさまでした。（
-          {mode === "oni" ? "鬼問題モード" : `領域：${domain}`}
-          ）
-        </p>
+        <h1 style={{ color: "#0b315b", fontSize: 24 }}>完了</h1>
+        <SessionProgressBar current={n} total={n} />
+        <div
+          style={{
+            padding: 16,
+            borderRadius: 14,
+            background: "linear-gradient(180deg, #f0f9ff 0%, #ffffff 100%)",
+            border: "1px solid #c5ddf5",
+            marginBottom: 16,
+            lineHeight: 1.65,
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "#0b315b" }}>おつかれさまでした</p>
+          <p style={{ margin: "8px 0 0", color: "#333" }}>
+            {n}問終了（
+            {mode === "oni" ? "鬼問題モード" : mode === "recent_wrong" ? "直近の間違い" : `領域：${domain}`}
+            ）
+          </p>
+        </div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <Link href="/" style={linkStyle}>ホームへ</Link>
           <Link href="/review" style={linkStyle}>復習へ</Link>
@@ -340,20 +399,17 @@ function SessionPageInner() {
       <p style={{ marginBottom: 12 }}>
         <Link href="/" style={backLinkStyle}>← 問題選択に戻る</Link>
       </p>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <h1 style={{ marginBottom: 8 }}>
-          {mode === "oni"
-            ? `試練（${questionCount}問）`
-            : mode === "recent_wrong"
-            ? `直近1週間の間違えた問題（${questionCount}問）`
-            : `基本修行（${questionCount}問）`}
-        </h1>
-        <div style={{ color: "#000" }}>
-          {idx + 1} / {questions.length}（
-          {mode === "oni" ? "鬼問題モード" : `領域：${domain}`}
-          ）
-        </div>
-      </div>
+      <h1 style={{ marginBottom: 8, color: "#0b315b", fontSize: 20 }}>
+        {mode === "oni"
+          ? `試練（${questions.length}問）`
+          : mode === "recent_wrong"
+          ? `直近1週間の間違えた問題（${questions.length}問）`
+          : `基本修行（${questions.length}問）`}
+      </h1>
+      <p style={{ margin: "0 0 12px", fontSize: 13, color: "#555" }}>
+        {mode === "oni" ? "鬼問題モード" : mode === "recent_wrong" ? "直近1週間の間違い" : `領域：${domain}`}
+      </p>
+      <SessionProgressBar current={idx + 1} total={questions.length} />
 
       {q.image_url && (
         <div style={{ ...card, background: "#222", padding: 12, marginBottom: 8 }}>
@@ -364,15 +420,23 @@ function SessionPageInner() {
           />
         </div>
       )}
-      <div style={{ ...card, background: "#333", color: "#fff" }}>
-        <div style={{ fontSize: 18, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{q.stem}</div>
+      <div
+        style={{
+          ...card,
+          background: "linear-gradient(145deg, #2a2a2a 0%, #1a1a1a 100%)",
+          color: "#fff",
+          border: "1px solid #444",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+        }}
+      >
+        <div style={{ fontSize: 18, lineHeight: 1.65, whiteSpace: "pre-wrap" }}>{q.stem}</div>
       </div>
 
       {stage === "quiz" && (
         <>
           <div style={{ display: "grid", gap: 10 }}>
             {choices.map(([k, v]) => (
-              <button key={k} onClick={() => submit(k)} style={choiceBtn}>
+              <button key={k} onClick={() => submit(k)} style={{ ...choiceBtn, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
                 {v}
               </button>
             ))}

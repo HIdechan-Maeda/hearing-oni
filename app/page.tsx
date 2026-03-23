@@ -438,11 +438,13 @@ export default function HomePage() {
             boxShadow: "0 18px 45px rgba(0,0,0,0.25)",
           }}
         >
-          <h1 style={{ marginTop: 0, marginBottom: 8 }}>聴覚・音響の鬼 (MVP)</h1>
-          <p style={{ marginTop: 0 }}>
-            ログイン中：<b>{userEmail}</b>
+          <h1 style={{ marginTop: 0, marginBottom: 6, fontSize: 26, color: "#0b315b", letterSpacing: "0.02em" }}>
+            聴覚・音響の鬼
+          </h1>
+          <p style={{ marginTop: 0, marginBottom: 16, fontSize: 14, color: "#444" }}>
+            ログイン中：<b style={{ color: "#111" }}>{userEmail}</b>
             {isTeacher && (
-              <span style={{ marginLeft: 8, fontSize: 13, color: "#0b4f9c" }}>（教師）</span>
+              <span style={{ marginLeft: 8, fontSize: 13, color: "#0b4f9c", fontWeight: 600 }}>（教師）</span>
             )}
           </p>
 
@@ -527,44 +529,66 @@ export default function HomePage() {
             </div>
           )}
 
-          <div style={{ marginTop: 10, marginBottom: 10 }}>
-            <div style={{ color: "#000", marginBottom: 6 }}>領域別出題</div>
-            <select
-              value={domain}
-              onChange={(e) => setDomain(e.target.value as DomainKey)}
-              style={{ width: "100%", padding: 10, fontSize: 16, borderRadius: 10, border: "1px solid #ccc" }}
-            >
-              {DOMAIN_OPTIONS.map((d) => (
-                <option key={d.key} value={d.key}>{d.label}</option>
-              ))}
-            </select>
-          </div>
-          <div style={{ marginTop: 4, marginBottom: 12 }}>
-            <div style={{ color: "#000", marginBottom: 6 }}>1セットの出題数</div>
-            <select
-              value={questionCount}
-              onChange={(e) => setQuestionCount(Number(e.target.value) as 5 | 10 | 20)}
-              style={{ width: "100%", padding: 10, fontSize: 16, borderRadius: 10, border: "1px solid #ccc" }}
-            >
-              <option value={5}>5問</option>
-              <option value={10}>10問</option>
-              <option value={20}>20問</option>
-            </select>
+          <div
+            style={{
+              marginTop: 8,
+              marginBottom: 20,
+              padding: 16,
+              borderRadius: 14,
+              background: "linear-gradient(180deg, #f8fbff 0%, #ffffff 100%)",
+              border: "1px solid #d0e3f7",
+              boxShadow: "0 4px 14px rgba(11, 79, 156, 0.06)",
+            }}
+          >
+            <h2 style={{ margin: "0 0 12px", fontSize: 15, fontWeight: 700, color: "#0b315b" }}>出題の設定</h2>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: "block", color: "#333", marginBottom: 6, fontSize: 13, fontWeight: 600 }}>領域</label>
+              <select
+                value={domain}
+                onChange={(e) => setDomain(e.target.value as DomainKey)}
+                style={{ width: "100%", padding: 12, fontSize: 16, borderRadius: 10, border: "1px solid #c5ddf5", background: "#fff", boxSizing: "border-box" }}
+              >
+                {DOMAIN_OPTIONS.map((d) => (
+                  <option key={d.key} value={d.key}>{d.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: "block", color: "#333", marginBottom: 6, fontSize: 13, fontWeight: 600 }}>1セットの出題数</label>
+              <select
+                value={questionCount}
+                onChange={(e) => setQuestionCount(Number(e.target.value) as 5 | 10 | 20)}
+                style={{ width: "100%", padding: 12, fontSize: 16, borderRadius: 10, border: "1px solid #c5ddf5", background: "#fff", boxSizing: "border-box" }}
+              >
+                <option value={5}>5問</option>
+                <option value={10}>10問</option>
+                <option value={20}>20問</option>
+              </select>
+            </div>
           </div>
 
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <Link href={sessionHref} style={linkBtnStyle}>基本修行</Link>
-            <Link href={oniSessionHref} style={linkBtnStyle}>試練モード</Link>
-            <Link href={recentWrongHref} style={linkBtnStyle}>直近1週間の間違えた問題</Link>
-            <Link href="/review" style={linkBtnStyle}>復習（キュー）</Link>
-            <Link href="/logs" style={linkBtnStyle}>日々の学習成果</Link>
-            <Link href="/dashboard" style={linkBtnStyle}>正答率グラフ</Link>
-            {!isTeacher && <Link href="/ranking" style={linkBtnStyle}>ランキング（所属・学年）</Link>}
-            {isTeacher && (
-              <Link href="/teacher" style={linkBtnStyle}>教師ダッシュボード</Link>
-            )}
-            <button onClick={signOut} style={btnStyle}>ログアウト</button>
+          <h2 style={{ margin: "0 0 12px", fontSize: 15, fontWeight: 700, color: "#0b315b" }}>学習メニュー</h2>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(158px, 1fr))",
+              gap: 10,
+              marginBottom: 16,
+            }}
+          >
+            <Link href={sessionHref} style={menuCardStyle}>基本修行</Link>
+            <Link href={oniSessionHref} style={{ ...menuCardStyle, borderColor: "#f5c6cb", background: "linear-gradient(180deg, #fff5f5 0%, #ffffff 100%)" }}>試練モード</Link>
+            <Link href={recentWrongHref} style={menuCardStyle}>直近1週間の間違い</Link>
+            <Link href="/review" style={menuCardStyle}>復習キュー</Link>
+            <Link href="/logs" style={menuCardStyle}>日々の学習成果</Link>
+            <Link href="/dashboard" style={menuCardStyle}>正答率グラフ</Link>
+            {!isTeacher && <Link href="/ranking" style={menuCardStyle}>ランキング</Link>}
+            {isTeacher && <Link href="/teacher" style={{ ...menuCardStyle, gridColumn: "1 / -1" }}>教師ダッシュボード</Link>}
           </div>
+
+          <button onClick={signOut} type="button" style={{ ...btnStyle, width: "100%", maxWidth: 280, borderColor: "#bbb", color: "#444" }}>
+            ログアウト
+          </button>
 
           {msg && !showStudentGate && (
             <p style={{ color: msg.includes("保存しました") ? "#0a0" : "#b00", marginTop: 12, whiteSpace: "pre-wrap" }}>{msg}</p>
@@ -585,9 +609,20 @@ const btnStyle: React.CSSProperties = {
   color: "#000",
 };
 
-const linkBtnStyle: React.CSSProperties = {
-  ...btnStyle,
+const menuCardStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minHeight: 52,
+  padding: "12px 14px",
+  fontSize: 15,
+  fontWeight: 600,
   textDecoration: "none",
-  display: "inline-block",
-  color: "#000",
+  textAlign: "center",
+  color: "#0b315b",
+  borderRadius: 12,
+  border: "1px solid #c5ddf5",
+  background: "linear-gradient(180deg, #ffffff 0%, #f3f8ff 100%)",
+  boxShadow: "0 2px 10px rgba(11, 79, 156, 0.08)",
+  lineHeight: 1.35,
 };
