@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
+import { RequireStudentProfile } from "../../components/RequireStudentProfile";
 
 type LogRow = {
   question_id: string;
@@ -54,7 +55,7 @@ function buildDays(rows: LogRow[]): DayGroup[] {
 
 type FilterType = "all" | "core" | "oni";
 
-export default function LogsPage() {
+function LogsPageInner() {
   const [rawLogs, setRawLogs] = useState<LogRow[]>([]);
   const [qTypeMap, setQTypeMap] = useState<Record<string, "oni" | "core">>({});
   const [filter, setFilter] = useState<FilterType>("all");
@@ -253,6 +254,14 @@ export default function LogsPage() {
       <hr style={{ margin: "18px 0" }} />
       <Link href="/" style={linkStyle}>ホームへ</Link>
     </main>
+  );
+}
+
+export default function LogsPage() {
+  return (
+    <RequireStudentProfile>
+      <LogsPageInner />
+    </RequireStudentProfile>
   );
 }
 

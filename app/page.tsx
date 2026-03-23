@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import Link from "next/link";
+import { isStudentProfileComplete } from "../lib/profileComplete";
 
 type DomainKey =
   | "all"
@@ -33,6 +34,12 @@ const DOMAIN_OPTIONS: Array<{ key: DomainKey; label: string }> = [
   { key: "development", label: "療育・発達（development）" },
 ];
 
+/** 学年（1〜4年・既卒） */
+const GRADE_OPTIONS = ["1年", "2年", "3年", "4年", "既卒"] as const;
+
+/** 所属（北海道医療大学を既定、「その他」は自由記入） */
+const AFFILIATION_PRESETS = ["北海道医療大学", "その他"] as const;
+
 export default function HomePage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -42,9 +49,14 @@ export default function HomePage() {
 
   const [domain, setDomain] = useState<DomainKey>("all");
   const [nickname, setNickname] = useState<string>("");
-  const [nicknameSaving, setNicknameSaving] = useState(false);
+  /** プルダウン値: 北海道医療大学 | その他 | 未選択 */
+  const [affiliation, setAffiliation] = useState<string>("");
+  const [affiliationOther, setAffiliationOther] = useState<string>("");
+  const [grade, setGrade] = useState<string>("");
+  const [profileSaving, setProfileSaving] = useState(false);
   const [questionCount, setQuestionCount] = useState<5 | 10 | 20>(10);
   const [isTeacher, setIsTeacher] = useState(false);
+  const [profileLoaded, setProfileLoaded] = useState(false);
 
   useEffect(() => {
     const savedDomain = window.localStorage.getItem("hearing_oni_domain");
@@ -53,6 +65,14 @@ export default function HomePage() {
     const savedCount = window.localStorage.getItem("hearing_oni_qcount");
     if (savedCount && ["5", "10", "20"].includes(savedCount)) {
       setQuestionCount(Number(savedCount) as 5 | 10 | 20);
+    }
+
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("needsProfile") === "1") {
+      setMsg("先にニックネーム・所属・学年を登録してください。");
+    }
+    if (sp.get("profileError") === "1") {
+      setMsg("プロフィールの取得に失敗しました。Supabase に affiliation / grade カラムを追加済みか確認してください。");
     }
 
     const getSession = async () => {
@@ -67,57 +87,132 @@ export default function HomePage() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  // ログイン中はプロフィール（ニックネーム）を取得
+  // ログイン中はプロフィールを取得
   useEffect(() => {
     if (!userEmail) {
       setNickname("");
+      setAffiliation("");
+      setAffiliationOther("");
+      setGrade("");
       setIsTeacher(false);
+      setProfileLoaded(false);
       return;
     }
     const loadProfile = async () => {
+      setProfileLoaded(false);
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
       const user = userData.user;
 
-      // プロフィールがなければ、Auth の email だけでも保存しておく
-      const { data: profile, error } = await supabase
+      let { data: profile, error } = await supabase
         .from("profiles")
-        .select("name,role,email")
+        .select("name,role,email,affiliation,grade")
         .eq("user_id", user.id)
         .maybeSingle();
 
-      if (!profile || error) {
+      if (error) {
+        setMsg("プロフィール取得エラー: " + error.message);
+        setProfileLoaded(true);
+        return;
+      }
+
+      if (!profile) {
+        const { error: upErr } = await supabase.from("profiles").upsert(
+          {
+            user_id: user.id,
+            email: user.email ?? "",
+          },
+          { onConflict: "user_id" }
+        );
+        if (upErr) setMsg("プロフィール初期化エラー: " + upErr.message);
+        const { data: p2 } = await supabase
+          .from("profiles")
+          .select("name,role,email,affiliation,grade")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        profile = p2 ?? null;
+      } else if ((profile.email ?? "") !== (user.email ?? "")) {
         await supabase.from("profiles").upsert(
           {
             user_id: user.id,
             email: user.email ?? "",
-            name: profile?.name ?? null,
+            name: profile.name,
+            affiliation: profile.affiliation,
+            grade: profile.grade,
           },
           { onConflict: "user_id" }
         );
       }
 
-      setNickname((profile?.name ?? "") || "");
-      setIsTeacher((profile?.role ?? "") === "teacher");
+      const role = profile?.role ?? "";
+      setIsTeacher(role === "teacher");
+
+      setNickname((profile?.name ?? "").trim());
+      const aff = (profile?.affiliation ?? "").trim();
+      if (aff === "北海道医療大学") {
+        setAffiliation("北海道医療大学");
+        setAffiliationOther("");
+      } else if (aff) {
+        setAffiliation("その他");
+        setAffiliationOther(aff);
+      } else {
+        setAffiliation("");
+        setAffiliationOther("");
+      }
+      const g = (profile?.grade ?? "").trim();
+      setGrade(GRADE_OPTIONS.includes(g as (typeof GRADE_OPTIONS)[number]) ? g : "");
+      setProfileLoaded(true);
     };
     loadProfile();
   }, [userEmail]);
 
-  const saveNickname = async () => {
+  const effectiveAffiliation =
+    affiliation === "その他" ? affiliationOther.trim() : affiliation.trim();
+  const effectiveGrade = grade.trim();
+
+  const studentProfileOk = isStudentProfileComplete(
+    isTeacher ? "teacher" : null,
+    nickname.trim(),
+    effectiveAffiliation,
+    effectiveGrade
+  );
+
+  const saveStudentProfile = async () => {
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) return;
-    setNicknameSaving(true);
+    const n = nickname.trim();
+    const a = effectiveAffiliation;
+    const g = effectiveGrade;
+    if (!n || !a || !g) {
+      setMsg("ニックネーム・所属・学年をすべて入力してください。");
+      return;
+    }
+    if (!affiliation) {
+      setMsg("所属を選択してください。");
+      return;
+    }
+    if (affiliation === "その他" && !affiliationOther.trim()) {
+      setMsg("「所属」でその他を選んだ場合は、所属名を入力してください。");
+      return;
+    }
+    setProfileSaving(true);
     setMsg("");
     const { error } = await supabase.from("profiles").upsert(
       {
         user_id: userData.user.id,
         email: userData.user.email ?? "",
-        name: nickname.trim() || null,
+        name: n,
+        affiliation: a,
+        grade: g,
       },
       { onConflict: "user_id" }
     );
-    setNicknameSaving(false);
-    if (error) setMsg("ニックネーム保存エラー: " + error.message);
+    setProfileSaving(false);
+    if (error) {
+      setMsg("プロフィール保存エラー: " + error.message);
+      return;
+    }
+    setMsg("保存しました。学習メニューから問題に進めます。");
   };
 
   useEffect(() => {
@@ -173,6 +268,8 @@ export default function HomePage() {
   }, [questionCount]);
 
   const recentWrongHref = "/session?mode=recent_wrong&count=10";
+
+  const showStudentGate = userEmail && profileLoaded && !isTeacher && !studentProfileOk;
 
   return (
     <main
@@ -234,6 +331,83 @@ export default function HomePage() {
 
           {msg && <p style={{ color: "#b00", marginTop: 10, whiteSpace: "pre-wrap" }}>{msg}</p>}
         </section>
+      ) : showStudentGate ? (
+        <section
+          style={{
+            width: "100%",
+            maxWidth: 480,
+            padding: 24,
+            borderRadius: 20,
+            background: "rgba(255,255,255,0.98)",
+            boxShadow: "0 18px 45px rgba(0,0,0,0.25)",
+          }}
+        >
+          <h1 style={{ marginTop: 0, fontSize: 22 }}>プロフィール登録（必須）</h1>
+          <p style={{ marginTop: 0, fontSize: 14, color: "#333" }}>
+            成績・学習状況の管理のため、以下を入力してから学習を開始してください。
+          </p>
+          <p style={{ fontSize: 13, color: "#555" }}>ログイン中：<b>{userEmail}</b></p>
+
+          <label style={{ display: "block", marginTop: 14, color: "#000", fontWeight: 600 }}>ニックネーム</label>
+          <input
+            value={nickname}
+            onChange={(e) => setNickname(e.target.value)}
+            placeholder="例: 山田"
+            maxLength={50}
+            style={{ width: "100%", padding: 10, fontSize: 16, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box" }}
+          />
+
+          <label style={{ display: "block", marginTop: 12, color: "#000", fontWeight: 600 }}>所属</label>
+          <select
+            value={affiliation}
+            onChange={(e) => {
+              setAffiliation(e.target.value);
+              if (e.target.value !== "その他") setAffiliationOther("");
+            }}
+            style={{ width: "100%", padding: 10, fontSize: 16, borderRadius: 8, border: "1px solid #ccc", marginBottom: 8 }}
+          >
+            <option value="">選択してください</option>
+            {AFFILIATION_PRESETS.map((a) => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+          {affiliation === "その他" && (
+            <input
+              value={affiliationOther}
+              onChange={(e) => setAffiliationOther(e.target.value)}
+              placeholder="所属を入力（例: ○○大学 ○○学科）"
+              maxLength={120}
+              style={{ width: "100%", padding: 10, fontSize: 16, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box" }}
+            />
+          )}
+
+          <label style={{ display: "block", marginTop: 12, color: "#000", fontWeight: 600 }}>学年</label>
+          <select
+            value={grade}
+            onChange={(e) => setGrade(e.target.value)}
+            style={{ width: "100%", padding: 10, fontSize: 16, borderRadius: 8, border: "1px solid #ccc" }}
+          >
+            <option value="">選択してください</option>
+            {GRADE_OPTIONS.map((g) => (
+              <option key={g} value={g}>{g}</option>
+            ))}
+          </select>
+
+          <button
+            onClick={saveStudentProfile}
+            disabled={profileSaving}
+            style={{ ...btnStyle, marginTop: 18, width: "100%", background: "#0b4f9c", color: "#fff", borderColor: "#0b4f9c" }}
+          >
+            {profileSaving ? "保存中..." : "登録して学習を始める"}
+          </button>
+          <button onClick={signOut} type="button" style={{ ...btnStyle, marginTop: 10, width: "100%" }}>
+            ログアウト
+          </button>
+
+          {msg && (
+            <p style={{ color: msg.includes("保存しました") ? "#0a0" : "#b00", marginTop: 12, whiteSpace: "pre-wrap" }}>{msg}</p>
+          )}
+        </section>
       ) : (
         <section
           style={{
@@ -248,23 +422,91 @@ export default function HomePage() {
           <h1 style={{ marginTop: 0, marginBottom: 8 }}>聴覚・音響の鬼 (MVP)</h1>
           <p style={{ marginTop: 0 }}>
             ログイン中：<b>{userEmail}</b>
+            {isTeacher && (
+              <span style={{ marginLeft: 8, fontSize: 13, color: "#0b4f9c" }}>（教師）</span>
+            )}
           </p>
 
-          <div style={{ marginTop: 12, marginBottom: 10 }}>
-            <label style={{ display: "block", color: "#000", marginBottom: 6 }}>ニックネーム（教師ダッシュボードに表示）</label>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          {!isTeacher && profileLoaded && studentProfileOk && (
+            <div
+              style={{
+                marginTop: 12,
+                marginBottom: 12,
+                padding: 12,
+                borderRadius: 12,
+                background: "#f0f7ff",
+                border: "1px solid #c5ddf5",
+                fontSize: 14,
+                color: "#000",
+              }}
+            >
+              <div>
+                <b>ニックネーム</b>：{nickname}
+              </div>
+              <div>
+                <b>所属</b>：{effectiveAffiliation}
+              </div>
+              <div>
+                <b>学年</b>：{effectiveGrade}
+              </div>
+              <p style={{ margin: "8px 0 0", fontSize: 12, color: "#555" }}>
+                変更する場合は下の欄を編集し「プロフィールを更新」を押してください。
+              </p>
+            </div>
+          )}
+
+          {!isTeacher && (
+            <div style={{ marginTop: 8, marginBottom: 10 }}>
+              <label style={{ display: "block", color: "#000", marginBottom: 6, fontWeight: 600 }}>ニックネーム</label>
               <input
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
-                placeholder="例: 田中"
                 maxLength={50}
-                style={{ flex: "1 1 200px", minWidth: 120, padding: 10, fontSize: 16, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box" }}
+                style={{ width: "100%", padding: 10, fontSize: 16, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box" }}
               />
-              <button onClick={saveNickname} disabled={nicknameSaving} style={btnStyle}>
-                {nicknameSaving ? "保存中..." : "保存"}
+              <label style={{ display: "block", color: "#000", marginTop: 10, marginBottom: 6, fontWeight: 600 }}>所属</label>
+              <select
+                value={affiliation}
+                onChange={(e) => {
+                  setAffiliation(e.target.value);
+                  if (e.target.value !== "その他") setAffiliationOther("");
+                }}
+                style={{ width: "100%", padding: 10, fontSize: 16, borderRadius: 8, border: "1px solid #ccc", marginBottom: 8 }}
+              >
+                <option value="">選択してください</option>
+                {AFFILIATION_PRESETS.map((a) => (
+                  <option key={a} value={a}>{a}</option>
+                ))}
+              </select>
+              {affiliation === "その他" && (
+                <input
+                  value={affiliationOther}
+                  onChange={(e) => setAffiliationOther(e.target.value)}
+                  placeholder="所属を入力"
+                  maxLength={120}
+                  style={{ width: "100%", padding: 10, fontSize: 16, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box", marginBottom: 8 }}
+                />
+              )}
+              <label style={{ display: "block", color: "#000", marginTop: 10, marginBottom: 6, fontWeight: 600 }}>学年</label>
+              <select
+                value={grade}
+                onChange={(e) => setGrade(e.target.value)}
+                style={{ width: "100%", padding: 10, fontSize: 16, borderRadius: 8, border: "1px solid #ccc" }}
+              >
+                <option value="">選択してください</option>
+                {GRADE_OPTIONS.map((g) => (
+                  <option key={g} value={g}>{g}</option>
+                ))}
+              </select>
+              <button
+                onClick={saveStudentProfile}
+                disabled={profileSaving}
+                style={{ ...btnStyle, marginTop: 10 }}
+              >
+                {profileSaving ? "保存中..." : "プロフィールを更新"}
               </button>
             </div>
-          </div>
+          )}
 
           <div style={{ marginTop: 10, marginBottom: 10 }}>
             <div style={{ color: "#000", marginBottom: 6 }}>領域別出題</div>
@@ -303,6 +545,10 @@ export default function HomePage() {
             )}
             <button onClick={signOut} style={btnStyle}>ログアウト</button>
           </div>
+
+          {msg && !showStudentGate && (
+            <p style={{ color: msg.includes("保存しました") ? "#0a0" : "#b00", marginTop: 12, whiteSpace: "pre-wrap" }}>{msg}</p>
+          )}
         </section>
       )}
     </main>

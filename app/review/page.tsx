@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import type { QuestionCore, Choice } from "../../types";
 import Link from "next/link";
+import { RequireStudentProfile } from "../../components/RequireStudentProfile";
 
 type ReviewRow = {
   question_id: string;
@@ -12,7 +13,7 @@ type ReviewRow = {
   q: QuestionCore | null;
 };
 
-export default function ReviewPage() {
+function ReviewPageInner() {
   const [items, setItems] = useState<ReviewRow[]>([]);
   const [msg, setMsg] = useState<string>("");
 
@@ -235,6 +236,14 @@ export default function ReviewPage() {
         </>
       )}
     </main>
+  );
+}
+
+export default function ReviewPage() {
+  return (
+    <RequireStudentProfile>
+      <ReviewPageInner />
+    </RequireStudentProfile>
   );
 }
 

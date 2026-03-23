@@ -36,6 +36,8 @@ type UserRow = {
   userId: string;
   name: string | null;
   email: string;
+  affiliation: string | null;
+  grade: string | null;
   stats: Record<DomainKey, DomainStat>;
 };
 
@@ -44,6 +46,8 @@ type ProfileRow = {
   email: string;
   name: string | null;
   role?: string | null;
+  affiliation?: string | null;
+  grade?: string | null;
 };
 
 export default function TeacherDashboardPage() {
@@ -106,7 +110,7 @@ export default function TeacherDashboardPage() {
 
       const { data: profiles, error: allProfErr } = await supabase
         .from("profiles")
-        .select("user_id,email,name")
+        .select("user_id,email,name,affiliation,grade")
         .in("user_id", userIds)
         .returns<ProfileRow[]>();
 
@@ -157,6 +161,8 @@ export default function TeacherDashboardPage() {
             userId: uid,
             name: prof?.name ?? null,
             email: prof?.email ?? "(email不明)",
+            affiliation: prof?.affiliation ?? null,
+            grade: prof?.grade ?? null,
             stats,
           };
         });
@@ -201,6 +207,13 @@ export default function TeacherDashboardPage() {
                     <div>
                       <div>{row.name ?? "(名前未設定)"}</div>
                       <div style={{ color: "#000", fontSize: 12 }}>{row.email}</div>
+                      {(row.affiliation || row.grade) && (
+                        <div style={{ color: "#333", fontSize: 12, marginTop: 4 }}>
+                          {row.affiliation && <span>所属: {row.affiliation}</span>}
+                          {row.affiliation && row.grade && " ／ "}
+                          {row.grade && <span>学年: {row.grade}</span>}
+                        </div>
+                      )}
                     </div>
                   </td>
                   {DOMAIN_OPTIONS.map((d) => {

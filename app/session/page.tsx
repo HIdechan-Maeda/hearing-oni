@@ -6,6 +6,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import type { Choice, QuestionCore } from "../../types";
 import Link from "next/link";
+import { RequireStudentProfile } from "../../components/RequireStudentProfile";
 
 type Stage = "loading" | "quiz" | "feedback" | "done";
 
@@ -24,6 +25,31 @@ const DOMAIN_KEYWORDS: Record<string, string[]> = {
   // 病気・統合問題
   disease: ["desease", "disease", "byouki", "病気", "complex", "統合"],
 };
+
+/** 直前に開始したセッションで出題した question_id（次回は可能な限り避ける） */
+const LS_LAST_SESSION_QUESTION_IDS = "hearing-oni:last-session-question-ids";
+
+function readLastSessionExcludedIds(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = window.localStorage.getItem(LS_LAST_SESSION_QUESTION_IDS);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((x): x is string => typeof x === "string"));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveLastSessionQuestionIds(ids: string[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(LS_LAST_SESSION_QUESTION_IDS, JSON.stringify(ids));
+  } catch {
+    // ストレージ満杯などは無視
+  }
+}
 
 function SessionPageInner() {
   const [domain, setDomain] = useState<string>("all");
@@ -114,7 +140,9 @@ function SessionPageInner() {
           return;
         }
 
-        const picked = shuffle(pool).slice(0, questionCount);
+        const excludeIds = readLastSessionExcludedIds();
+        const picked = pickAvoidingLastSession(pool, questionCount, excludeIds);
+        saveLastSessionQuestionIds(picked.map((q) => q.id));
         setQuestions(picked);
         setIdx(0);
         setSelected(null);
@@ -175,7 +203,9 @@ function SessionPageInner() {
         return;
       }
 
-      const picked = shuffle(filtered).slice(0, questionCount);
+      const excludeIds = readLastSessionExcludedIds();
+      const picked = pickAvoidingLastSession(filtered, questionCount, excludeIds);
+      saveLastSessionQuestionIds(picked.map((q) => q.id));
       setQuestions(picked);
       setIdx(0);
       setSelected(null);
@@ -185,8 +215,8 @@ function SessionPageInner() {
     };
 
     load();
-    // domain / mode が変わったら新セッション
-  }, [domain, mode]);
+    // domain / mode / 出題数 が変わったら新セッション
+  }, [domain, mode, questionCount]);
 
   const choices = useMemo(() => {
     if (!q) return [];
@@ -371,7 +401,9 @@ function SessionPageInner() {
 export default function SessionPage() {
   return (
     <Suspense fallback={<main style={wrap}><p>読み込み中...</p></main>}>
-      <SessionPageInner />
+      <RequireStudentProfile>
+        <SessionPageInner />
+      </RequireStudentProfile>
     </Suspense>
   );
 }
@@ -383,6 +415,85 @@ function shuffle<T>(arr: T[]): T[] {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
+}
+
+/** tags_raw の先頭トークン（カンマ・セミコロン区切り）でバケット化。同じサブトピックばかり選ばれにくくする */
+function questionBucketKey(q: QuestionCore): string {
+  const raw = (q.tags_raw ?? "").trim();
+  if (!raw) return "__untagged__";
+  const first = raw.split(/[,;，、]/)[0]?.trim().toLowerCase() ?? "";
+  return first || "__untagged__";
+}
+
+/**
+ * ランダムだが「タグ（サブトピック）の偏り」を抑えて取り出す。
+ * 各バケットから交互に1問ずつ取り、足りなければ残りをシャッフルして埋める。
+ */
+function pickDiverseQuestions(pool: QuestionCore[], n: number): QuestionCore[] {
+  if (pool.length <= n) return shuffle([...pool]);
+  const buckets = new Map<string, QuestionCore[]>();
+  for (const q of pool) {
+    const k = questionBucketKey(q);
+    if (!buckets.has(k)) buckets.set(k, []);
+    buckets.get(k)!.push(q);
+  }
+  for (const arr of buckets.values()) shuffle(arr);
+
+  const bucketKeys = shuffle([...buckets.keys()]);
+  const out: QuestionCore[] = [];
+  const idxMap = new Map<string, number>();
+  for (const k of bucketKeys) idxMap.set(k, 0);
+
+  // ラウンドロビン（バケット順は毎回シャッフル済み）
+  let progressed = true;
+  while (out.length < n && progressed) {
+    progressed = false;
+    for (const k of bucketKeys) {
+      if (out.length >= n) break;
+      const arr = buckets.get(k)!;
+      const i = idxMap.get(k)!;
+      if (i < arr.length) {
+        out.push(arr[i]);
+        idxMap.set(k, i + 1);
+        progressed = true;
+      }
+    }
+  }
+
+  if (out.length < n) {
+    const used = new Set(out.map((q) => q.id));
+    const rest = shuffle(pool.filter((q) => !used.has(q.id)));
+    for (const q of rest) {
+      if (out.length >= n) break;
+      out.push(q);
+    }
+  }
+
+  return out.slice(0, n);
+}
+
+/**
+ * 直近セッションで出た問題 ID は除外して選ぶ。
+ * 除外だけだと件数が足りない場合は残りプールから埋める（重複しうるが出題数は保証）。
+ */
+function pickAvoidingLastSession(
+  pool: QuestionCore[],
+  n: number,
+  excludeIds: Set<string>
+): QuestionCore[] {
+  const preferred = pool.filter((q) => !excludeIds.has(q.id));
+  if (preferred.length >= n) {
+    return pickDiverseQuestions(preferred, n);
+  }
+  if (preferred.length === 0) {
+    return pickDiverseQuestions(pool, n);
+  }
+  const primary = pickDiverseQuestions(preferred, preferred.length);
+  const used = new Set(primary.map((q) => q.id));
+  const restPool = pool.filter((q) => !used.has(q.id));
+  const need = n - primary.length;
+  const secondary = pickDiverseQuestions(restPool, need);
+  return [...primary, ...secondary].slice(0, n);
 }
 
 function nextReviewAt(reason: "wrong" | "hard") {

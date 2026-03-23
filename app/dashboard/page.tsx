@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
+import { RequireStudentProfile } from "../../components/RequireStudentProfile";
 
 type DomainKey =
   | "anatomy"
@@ -60,7 +61,7 @@ function barColor(正答率: number): string {
   return "#a52a2a";
 }
 
-export default function StudentDashboardPage() {
+function StudentDashboardPageInner() {
   const [data, setData] = useState<ChartRow[]>([]);
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(true);
@@ -256,5 +257,13 @@ export default function StudentDashboardPage() {
         ホームへ
       </Link>
     </main>
+  );
+}
+
+export default function StudentDashboardPage() {
+  return (
+    <RequireStudentProfile>
+      <StudentDashboardPageInner />
+    </RequireStudentProfile>
   );
 }
