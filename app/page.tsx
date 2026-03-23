@@ -276,114 +276,79 @@ export default function HomePage() {
   const showStudentGate = userEmail && profileLoaded && !isTeacher && !studentProfileOk;
 
   return (
-    <main
-      style={{
-        minHeight: "100dvh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-        background: "linear-gradient(145deg, #0b315b, #1c7ed6)",
-      }}
-    >
+    <main className="app-shell">
       {!userEmail ? (
-        <section
-          style={{
-            width: "100%",
-            maxWidth: 420,
-            padding: 24,
-            borderRadius: 20,
-            background: "rgba(255,255,255,0.96)",
-            boxShadow: "0 18px 45px rgba(0,0,0,0.35)",
-          }}
-        >
-          <div style={{ textAlign: "center", marginBottom: 18 }}>
+        <section className="glass-panel glass-panel--narrow">
+          <div style={{ textAlign: "center", marginBottom: 22 }}>
             <img
               src="/choukaku-oni-512.png"
               alt="聴覚の鬼ロゴ"
-              style={{ width: 80, height: 80, borderRadius: 20, marginBottom: 8 }}
+              style={{ width: 88, height: 88, borderRadius: 22, marginBottom: 10, boxShadow: "0 8px 24px rgba(0,40,100,0.15)" }}
             />
-            <h1 style={{ margin: 0, fontSize: 24 }}>聴覚・音響の鬼</h1>
-            <p style={{ margin: "4px 0 0", fontSize: 13, color: "#555" }}>
+            <h1 style={{ margin: 0, fontSize: 26, color: "#0b315b", letterSpacing: "0.04em" }}>聴覚・音響の鬼</h1>
+            <p style={{ margin: "8px 0 0", fontSize: 13, color: "#5a6b7c", lineHeight: 1.5 }}>
               学内メールで新規登録してからログインしてください。
             </p>
           </div>
 
-          <label style={{ display: "block", marginTop: 8, color: "#000", fontSize: 14 }}>Email（@hoku-iryo-u.ac.jp）</label>
+          <label style={{ display: "block", marginTop: 8, color: "#334", fontSize: 13, fontWeight: 600 }}>Email（@hoku-iryo-u.ac.jp）</label>
           <input
+            className="input-elegant"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="student@hoku-iryo-u.ac.jp"
-            style={{ width: "100%", padding: 10, fontSize: 16, boxSizing: "border-box", borderRadius: 10, border: "1px solid #ccc" }}
           />
 
-          <label style={{ display: "block", marginTop: 10, color: "#000", fontSize: 14 }}>Password</label>
+          <label style={{ display: "block", marginTop: 12, color: "#334", fontSize: 13, fontWeight: 600 }}>Password</label>
           <input
+            className="input-elegant"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="password"
-            style={{ width: "100%", padding: 10, fontSize: 16, boxSizing: "border-box", borderRadius: 10, border: "1px solid #ccc" }}
           />
 
-          <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
-            <button onClick={signIn} style={{ ...btnStyle, flex: 1 }}>ログイン</button>
-            <button onClick={signUp} style={{ ...btnStyle, flex: 1, background: "#0b4f9c", color: "#fff", borderColor: "#0b4f9c" }}>
+          <div style={{ display: "flex", gap: 12, marginTop: 20, flexWrap: "wrap" }}>
+            <button type="button" onClick={signIn} className="btn-primary-solid" style={{ flex: 1, minWidth: 120 }}>
+              ログイン
+            </button>
+            <button type="button" onClick={signUp} className="btn-accent-outline" style={{ flex: 1, minWidth: 120 }}>
               新規登録
             </button>
           </div>
 
-          {msg && <p style={{ color: "#b00", marginTop: 10, whiteSpace: "pre-wrap" }}>{msg}</p>}
+          {msg && <p style={{ color: "#b00", marginTop: 12, whiteSpace: "pre-wrap", fontSize: 14 }}>{msg}</p>}
         </section>
       ) : !profileLoaded ? (
-        <section
-          style={{
-            width: "100%",
-            maxWidth: 420,
-            padding: 24,
-            borderRadius: 20,
-            background: "rgba(255,255,255,0.98)",
-            boxShadow: "0 18px 45px rgba(0,0,0,0.25)",
-            textAlign: "center",
-            color: "#000",
-          }}
-        >
-          <p style={{ margin: 0, fontSize: 16 }}>プロフィールを読み込み中です…</p>
+        <section className="glass-panel glass-panel--narrow" style={{ textAlign: "center" }}>
+          <p style={{ margin: 0, fontSize: 16, color: "#334" }}>プロフィールを読み込み中です…</p>
         </section>
       ) : showStudentGate ? (
-        <section
-          style={{
-            width: "100%",
-            maxWidth: 480,
-            padding: 24,
-            borderRadius: 20,
-            background: "rgba(255,255,255,0.98)",
-            boxShadow: "0 18px 45px rgba(0,0,0,0.25)",
-          }}
-        >
+        <section className="glass-panel glass-panel--gate">
           <h1 style={{ marginTop: 0, fontSize: 22 }}>プロフィール登録（必須）</h1>
           <p style={{ marginTop: 0, fontSize: 14, color: "#333" }}>
             成績・学習状況の管理のため、以下を入力してから学習を開始してください。
           </p>
           <p style={{ fontSize: 13, color: "#555" }}>ログイン中：<b>{userEmail}</b></p>
 
-          <label style={{ display: "block", marginTop: 14, color: "#000", fontWeight: 600 }}>ニックネーム</label>
+          <label style={{ display: "block", marginTop: 14, color: "#334", fontWeight: 600, fontSize: 13 }}>ニックネーム</label>
           <input
+            className="input-elegant"
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
             placeholder="例: 山田"
             maxLength={50}
-            style={{ width: "100%", padding: 10, fontSize: 16, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box" }}
           />
 
-          <label style={{ display: "block", marginTop: 12, color: "#000", fontWeight: 600 }}>所属</label>
+          <label style={{ display: "block", marginTop: 12, color: "#334", fontWeight: 600, fontSize: 13 }}>所属</label>
           <select
+            className="input-elegant"
             value={affiliation}
             onChange={(e) => {
               setAffiliation(e.target.value);
               if (e.target.value !== "その他") setAffiliationOther("");
             }}
-            style={{ width: "100%", padding: 10, fontSize: 16, borderRadius: 8, border: "1px solid #ccc", marginBottom: 8 }}
+            style={{ marginBottom: 8 }}
           >
             <option value="">選択してください</option>
             {AFFILIATION_PRESETS.map((a) => (
@@ -392,20 +357,16 @@ export default function HomePage() {
           </select>
           {affiliation === "その他" && (
             <input
+              className="input-elegant"
               value={affiliationOther}
               onChange={(e) => setAffiliationOther(e.target.value)}
               placeholder="所属を入力（例: ○○大学 ○○学科）"
               maxLength={120}
-              style={{ width: "100%", padding: 10, fontSize: 16, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box" }}
             />
           )}
 
-          <label style={{ display: "block", marginTop: 12, color: "#000", fontWeight: 600 }}>学年</label>
-          <select
-            value={grade}
-            onChange={(e) => setGrade(e.target.value)}
-            style={{ width: "100%", padding: 10, fontSize: 16, borderRadius: 8, border: "1px solid #ccc" }}
-          >
+          <label style={{ display: "block", marginTop: 12, color: "#334", fontWeight: 600, fontSize: 13 }}>学年</label>
+          <select className="input-elegant" value={grade} onChange={(e) => setGrade(e.target.value)}>
             <option value="">選択してください</option>
             {GRADE_OPTIONS.map((g) => (
               <option key={g} value={g}>{g}</option>
@@ -413,13 +374,15 @@ export default function HomePage() {
           </select>
 
           <button
+            type="button"
             onClick={saveStudentProfile}
             disabled={profileSaving}
-            style={{ ...btnStyle, marginTop: 18, width: "100%", background: "#0b4f9c", color: "#fff", borderColor: "#0b4f9c" }}
+            className="btn-primary-solid"
+            style={{ marginTop: 18, width: "100%", opacity: profileSaving ? 0.7 : 1 }}
           >
             {profileSaving ? "保存中..." : "登録して学習を始める"}
           </button>
-          <button onClick={signOut} type="button" style={{ ...btnStyle, marginTop: 10, width: "100%" }}>
+          <button onClick={signOut} type="button" className="btn-logout-soft" style={{ marginTop: 12, maxWidth: "100%" }}>
             ログアウト
           </button>
 
@@ -428,16 +391,7 @@ export default function HomePage() {
           )}
         </section>
       ) : (
-        <section
-          style={{
-            width: "100%",
-            maxWidth: 720,
-            padding: 24,
-            borderRadius: 20,
-            background: "rgba(255,255,255,0.98)",
-            boxShadow: "0 18px 45px rgba(0,0,0,0.25)",
-          }}
-        >
+        <section className="glass-panel glass-panel--home">
           <h1 style={{ marginTop: 0, marginBottom: 6, fontSize: 26, color: "#0b315b", letterSpacing: "0.02em" }}>
             聴覚・音響の鬼
           </h1>
@@ -478,21 +432,22 @@ export default function HomePage() {
 
           {!isTeacher && profileLoaded && (
             <div style={{ marginTop: 8, marginBottom: 10 }}>
-              <label style={{ display: "block", color: "#000", marginBottom: 6, fontWeight: 600 }}>ニックネーム</label>
+              <label style={{ display: "block", color: "#334", marginBottom: 6, fontWeight: 600, fontSize: 13 }}>ニックネーム</label>
               <input
+                className="input-elegant"
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
                 maxLength={50}
-                style={{ width: "100%", padding: 10, fontSize: 16, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box" }}
               />
-              <label style={{ display: "block", color: "#000", marginTop: 10, marginBottom: 6, fontWeight: 600 }}>所属</label>
+              <label style={{ display: "block", color: "#334", marginTop: 10, marginBottom: 6, fontWeight: 600, fontSize: 13 }}>所属</label>
               <select
+                className="input-elegant"
                 value={affiliation}
                 onChange={(e) => {
                   setAffiliation(e.target.value);
                   if (e.target.value !== "その他") setAffiliationOther("");
                 }}
-                style={{ width: "100%", padding: 10, fontSize: 16, borderRadius: 8, border: "1px solid #ccc", marginBottom: 8 }}
+                style={{ marginBottom: 8 }}
               >
                 <option value="">選択してください</option>
                 {AFFILIATION_PRESETS.map((a) => (
@@ -501,28 +456,27 @@ export default function HomePage() {
               </select>
               {affiliation === "その他" && (
                 <input
+                  className="input-elegant"
                   value={affiliationOther}
                   onChange={(e) => setAffiliationOther(e.target.value)}
                   placeholder="所属を入力"
                   maxLength={120}
-                  style={{ width: "100%", padding: 10, fontSize: 16, borderRadius: 8, border: "1px solid #ccc", boxSizing: "border-box", marginBottom: 8 }}
+                  style={{ marginBottom: 8 }}
                 />
               )}
-              <label style={{ display: "block", color: "#000", marginTop: 10, marginBottom: 6, fontWeight: 600 }}>学年</label>
-              <select
-                value={grade}
-                onChange={(e) => setGrade(e.target.value)}
-                style={{ width: "100%", padding: 10, fontSize: 16, borderRadius: 8, border: "1px solid #ccc" }}
-              >
+              <label style={{ display: "block", color: "#334", marginTop: 10, marginBottom: 6, fontWeight: 600, fontSize: 13 }}>学年</label>
+              <select className="input-elegant" value={grade} onChange={(e) => setGrade(e.target.value)}>
                 <option value="">選択してください</option>
                 {GRADE_OPTIONS.map((g) => (
                   <option key={g} value={g}>{g}</option>
                 ))}
               </select>
               <button
+                type="button"
                 onClick={saveStudentProfile}
                 disabled={profileSaving}
-                style={{ ...btnStyle, marginTop: 10 }}
+                className="btn-primary-solid"
+                style={{ marginTop: 12, width: "100%", maxWidth: 320, opacity: profileSaving ? 0.7 : 1 }}
               >
                 {profileSaving ? "保存中..." : "プロフィールを更新"}
               </button>
@@ -544,9 +498,9 @@ export default function HomePage() {
             <div style={{ marginBottom: 12 }}>
               <label style={{ display: "block", color: "#333", marginBottom: 6, fontSize: 13, fontWeight: 600 }}>領域</label>
               <select
+                className="input-elegant"
                 value={domain}
                 onChange={(e) => setDomain(e.target.value as DomainKey)}
-                style={{ width: "100%", padding: 12, fontSize: 16, borderRadius: 10, border: "1px solid #c5ddf5", background: "#fff", boxSizing: "border-box" }}
               >
                 {DOMAIN_OPTIONS.map((d) => (
                   <option key={d.key} value={d.key}>{d.label}</option>
@@ -556,9 +510,9 @@ export default function HomePage() {
             <div>
               <label style={{ display: "block", color: "#333", marginBottom: 6, fontSize: 13, fontWeight: 600 }}>1セットの出題数</label>
               <select
+                className="input-elegant"
                 value={questionCount}
                 onChange={(e) => setQuestionCount(Number(e.target.value) as 5 | 10 | 20)}
-                style={{ width: "100%", padding: 12, fontSize: 16, borderRadius: 10, border: "1px solid #c5ddf5", background: "#fff", boxSizing: "border-box" }}
               >
                 <option value={5}>5問</option>
                 <option value={10}>10問</option>
@@ -576,17 +530,21 @@ export default function HomePage() {
               marginBottom: 16,
             }}
           >
-            <Link href={sessionHref} style={menuCardStyle}>基本修行</Link>
-            <Link href={oniSessionHref} style={{ ...menuCardStyle, borderColor: "#f5c6cb", background: "linear-gradient(180deg, #fff5f5 0%, #ffffff 100%)" }}>試練モード</Link>
-            <Link href={recentWrongHref} style={menuCardStyle}>直近1週間の間違い</Link>
-            <Link href="/review" style={menuCardStyle}>復習キュー</Link>
-            <Link href="/logs" style={menuCardStyle}>日々の学習成果</Link>
-            <Link href="/dashboard" style={menuCardStyle}>正答率グラフ</Link>
-            {!isTeacher && <Link href="/ranking" style={menuCardStyle}>ランキング</Link>}
-            {isTeacher && <Link href="/teacher" style={{ ...menuCardStyle, gridColumn: "1 / -1" }}>教師ダッシュボード</Link>}
+            <Link href={sessionHref} className="menu-card">基本修行</Link>
+            <Link href={oniSessionHref} className="menu-card menu-card--oni">試練モード</Link>
+            <Link href={recentWrongHref} className="menu-card">直近1週間の間違い</Link>
+            <Link href="/review" className="menu-card">復習キュー</Link>
+            <Link href="/logs" className="menu-card">日々の学習成果</Link>
+            <Link href="/dashboard" className="menu-card">正答率グラフ</Link>
+            {!isTeacher && <Link href="/ranking" className="menu-card">ランキング</Link>}
+            {isTeacher && (
+              <Link href="/teacher" className="menu-card menu-card--wide">
+                教師ダッシュボード
+              </Link>
+            )}
           </div>
 
-          <button onClick={signOut} type="button" style={{ ...btnStyle, width: "100%", maxWidth: 280, borderColor: "#bbb", color: "#444" }}>
+          <button onClick={signOut} type="button" className="btn-logout-soft">
             ログアウト
           </button>
 
@@ -598,31 +556,3 @@ export default function HomePage() {
     </main>
   );
 }
-
-const btnStyle: React.CSSProperties = {
-  padding: "10px 14px",
-  fontSize: 16,
-  cursor: "pointer",
-  borderRadius: 10,
-  border: "1px solid #ccc",
-  background: "#fff",
-  color: "#000",
-};
-
-const menuCardStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  minHeight: 52,
-  padding: "12px 14px",
-  fontSize: 15,
-  fontWeight: 600,
-  textDecoration: "none",
-  textAlign: "center",
-  color: "#0b315b",
-  borderRadius: 12,
-  border: "1px solid #c5ddf5",
-  background: "linear-gradient(180deg, #ffffff 0%, #f3f8ff 100%)",
-  boxShadow: "0 2px 10px rgba(11, 79, 156, 0.08)",
-  lineHeight: 1.35,
-};

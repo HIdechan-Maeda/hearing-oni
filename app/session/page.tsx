@@ -340,9 +340,9 @@ function SessionPageInner() {
 
   if (stage === "loading") {
     return (
-      <main style={wrap}>
+      <main className="session-page">
         <p style={{ marginBottom: 12 }}>
-          <Link href="/" style={backLinkStyle}>← ホームへ</Link>
+          <Link href="/" className="session-back-link">← ホームへ</Link>
         </p>
         <h1 style={{ color: "#0b315b", fontSize: 22 }}>
           {mode === "oni"
@@ -353,7 +353,7 @@ function SessionPageInner() {
         </h1>
         <SessionProgressBar current={0} total={questionCount} />
         <p style={{ lineHeight: 1.6 }}>{msg || "読み込み中..."}</p>
-        <Link href="/" style={linkStyle}>ホームへ</Link>
+        <Link href="/" className="link-pill">ホームへ</Link>
       </main>
     );
   }
@@ -361,9 +361,9 @@ function SessionPageInner() {
   if (stage === "done") {
     const n = questions.length || questionCount;
     return (
-      <main style={wrap}>
+      <main className="session-page">
         <p style={{ marginBottom: 12 }}>
-          <Link href="/" style={backLinkStyle}>← ホームへ</Link>
+          <Link href="/" className="session-back-link">← ホームへ</Link>
         </p>
         <h1 style={{ color: "#0b315b", fontSize: 24 }}>完了</h1>
         <SessionProgressBar current={n} total={n} />
@@ -385,8 +385,8 @@ function SessionPageInner() {
           </p>
         </div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <Link href="/" style={linkStyle}>ホームへ</Link>
-          <Link href="/review" style={linkStyle}>復習へ</Link>
+          <Link href="/" className="link-pill">ホームへ</Link>
+          <Link href="/review" className="link-pill">復習へ</Link>
         </div>
       </main>
     );
@@ -395,9 +395,9 @@ function SessionPageInner() {
   if (!q) return null;
 
   return (
-    <main style={wrap}>
+    <main className="session-page">
       <p style={{ marginBottom: 12 }}>
-        <Link href="/" style={backLinkStyle}>← 問題選択に戻る</Link>
+        <Link href="/" className="session-back-link">← 問題選択に戻る</Link>
       </p>
       <h1 style={{ marginBottom: 8, color: "#0b315b", fontSize: 20 }}>
         {mode === "oni"
@@ -436,7 +436,7 @@ function SessionPageInner() {
         <>
           <div style={{ display: "grid", gap: 10 }}>
             {choices.map(([k, v]) => (
-              <button key={k} onClick={() => submit(k)} style={{ ...choiceBtn, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+              <button key={k} type="button" onClick={() => submit(k)} className="choice-btn">
                 {v}
               </button>
             ))}
@@ -445,26 +445,37 @@ function SessionPageInner() {
       )}
 
       {stage === "feedback" && (
-        <div style={{ marginTop: 14 }}>
-          <div style={{ fontSize: 18 }}>
-            {isCorrect ? "✅ 正解" : "❌ 不正解"}
-            （あなたの解答：{(q as any)[`choice_${selected?.toLowerCase()}`] ?? selected} / 正解：{(q as any)[`choice_${q.answer.toLowerCase()}`] ?? q.answer}）
+        <div style={{ marginTop: 18 }}>
+          <div style={{ marginBottom: 10 }}>
+            <span className={isCorrect ? "feedback-badge feedback-badge--ok" : "feedback-badge feedback-badge--ng"}>
+              {isCorrect ? "正解" : "不正解"}
+            </span>
           </div>
-          {q.explain && <p style={{ whiteSpace: "pre-wrap" }}><b>解説：</b>{q.explain}</p>}
+          <p style={{ fontSize: 15, color: "#333", lineHeight: 1.65, margin: "0 0 12px" }}>
+            あなたの解答：{(q as any)[`choice_${selected?.toLowerCase()}`] ?? selected} / 正解：{(q as any)[`choice_${q.answer.toLowerCase()}`] ?? q.answer}
+          </p>
+          {q.explain && (
+            <p style={{ whiteSpace: "pre-wrap", padding: 14, borderRadius: 12, background: "rgba(255,255,255,0.9)", border: "1px solid #d0e3f5" }}>
+              <b>解説：</b>
+              {q.explain}
+            </p>
+          )}
           {msg && <pre style={{ color: "#b00", whiteSpace: "pre-wrap" }}>{msg}</pre>}
-          <button onClick={next} style={{ ...btn, marginTop: 8 }}>次へ</button>
+          <button type="button" onClick={next} className="btn-next">
+            次へ
+          </button>
         </div>
       )}
 
-      <hr style={{ margin: "18px 0" }} />
-      <Link href="/" style={linkStyle}>ホームへ</Link>
+      <hr style={{ margin: "22px 0", border: "none", borderTop: "1px solid rgba(0,0,0,0.08)" }} />
+      <Link href="/" className="link-pill">ホームへ</Link>
     </main>
   );
 }
 
 export default function SessionPage() {
   return (
-    <Suspense fallback={<main style={wrap}><p>読み込み中...</p></main>}>
+    <Suspense fallback={<main className="session-page"><p>読み込み中...</p></main>}>
       <RequireStudentProfile>
         <SessionPageInner />
       </RequireStudentProfile>
@@ -567,10 +578,4 @@ function nextReviewAt(reason: "wrong" | "hard") {
   return now;
 }
 
-const wrap: React.CSSProperties = { maxWidth: 720, margin: "0 auto", padding: 16 };
 const card: React.CSSProperties = { padding: 12, border: "1px solid #ddd", borderRadius: 12, marginBottom: 12, color: "#000" };
-const btn: React.CSSProperties = { padding: "10px 14px", fontSize: 16, cursor: "pointer", borderRadius: 10, border: "1px solid #ccc", background: "#fff", color: "#000" };
-const pill: React.CSSProperties = { ...btn, padding: "8px 12px" };
-const choiceBtn: React.CSSProperties = { ...btn, textAlign: "left", color: "#000" };
-const linkStyle: React.CSSProperties = { ...btn, textDecoration: "none", display: "inline-block", color: "#000" };
-const backLinkStyle: React.CSSProperties = { ...btn, textDecoration: "none", display: "inline-block", color: "#000", padding: "10px 16px", fontSize: 15 };
