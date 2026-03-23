@@ -271,8 +271,9 @@ export default function HomePage() {
     const params = new URLSearchParams();
     params.set("mode", "oni");
     params.set("count", String(questionCount));
+    if (domain !== "all") params.set("domain", domain);
     return `/session?${params.toString()}`;
-  }, [questionCount]);
+  }, [domain, questionCount]);
 
   const recentWrongHref = "/session?mode=recent_wrong&count=10";
 

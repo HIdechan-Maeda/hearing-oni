@@ -26,6 +26,20 @@ const DOMAIN_KEYWORDS: Record<string, string[]> = {
   disease: ["desease", "disease", "byouki", "病気", "complex", "統合"],
 };
 
+/**
+ * tags_raw を DOMAIN_KEYWORDS に照らして「領域」バケットに分類（試練モードの偏り対策）
+ */
+function questionDomainBucketKey(q: QuestionCore): string {
+  const raw = (q.tags_raw ?? "").toLowerCase();
+  if (!raw) return "__untagged__";
+  for (const [domain, keywords] of Object.entries(DOMAIN_KEYWORDS)) {
+    if (keywords.some((kw) => raw.includes(kw.toLowerCase()))) {
+      return domain;
+    }
+  }
+  return "__other__";
+}
+
 const ONI_FETCH_PAGE = 1000;
 
 /** DB の difficulty が鬼問題か（表記ゆれ対応） */
@@ -168,6 +182,13 @@ function SessionPageInner() {
 
   const q = questions[idx];
 
+  const oniLineLabel = useMemo(() => {
+    if (mode !== "oni") return "";
+    return domain === "all"
+      ? "鬼問題モード（全領域ミックス）"
+      : `鬼問題モード（領域：${domain}）`;
+  }, [mode, domain]);
+
   // 初回マウント時に URL からクエリパラメータを読む（useSearchParams を使わない）
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -282,7 +303,14 @@ function SessionPageInner() {
         (x.tags_raw ?? "").toLowerCase().includes(keyword.toLowerCase());
 
       if (mode === "oni") {
+        // 1) 鬼問題のみ 2) 領域指定時は tags_raw で領域に合致するものだけ（基本修行と同じキーワード）
         filtered = filtered.filter((x) => isOniDifficulty(x.difficulty));
+        if (domain !== "all") {
+          const keywords = DOMAIN_KEYWORDS[domain] ?? [domain];
+          filtered = filtered.filter((x) =>
+            keywords.some((kw) => lowerTagIncludes(x, kw))
+          );
+        }
       } else {
         // 基本修行: oni タグ付け（difficulty = 'oni'）の問題は出題しない
         filtered = filtered.filter(
@@ -299,20 +327,30 @@ function SessionPageInner() {
       if (filtered.length === 0) {
         const label =
           mode === "oni"
-            ? "鬼問題（difficulty = 'oni'）"
+            ? domain === "all"
+              ? "鬼問題（difficulty = 'oni'）"
+              : `鬼問題かつ領域「${domain}」`
             : `領域「${domain}」`;
         setMsg(
-          `${label} に該当する問題が0件です。鬼問題にしたい行の difficulty 列を 'oni' に設定してください。`
+          mode === "oni" && domain !== "all"
+            ? `${label} に該当する問題が0件です。その領域の tags_raw と difficulty='oni' を確認してください。`
+            : `${label} に該当する問題が0件です。鬼問題にしたい行の difficulty 列を 'oni' に設定してください。`
         );
         return;
       }
 
       const excludeIds = readLastSessionExcludedIds();
-      const picked = shuffle(
-        pickAvoidingLastSession(filtered, questionCount, excludeIds, {
-          pickStrategy: mode === "oni" ? "random" : "diverse",
-        })
-      );
+      // 試練・全領域: 領域（DOMAIN_KEYWORDS）ごとにロビン抽選 → shuffle しない
+      // 試練・1領域: その領域に絞ったうえでランダム抽出（領域→oni→ランダム）
+      // 基本修行: タグ先頭でサブトピック分散 → 順序シャッフル
+      const oniAllDomains = mode === "oni" && domain === "all";
+      const oniOneDomain = mode === "oni" && domain !== "all";
+      const bucketKey = oniAllDomains ? questionDomainBucketKey : questionBucketKey;
+      const rawPicked = pickAvoidingLastSession(filtered, questionCount, excludeIds, {
+        bucketKey,
+        pickRandom: oniOneDomain,
+      });
+      const picked = oniAllDomains ? rawPicked : shuffle(rawPicked);
       saveLastSessionQuestionIds(picked.map((q) => q.id));
       setQuestions(picked);
       setIdx(0);
@@ -444,7 +482,7 @@ function SessionPageInner() {
           <p style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "#0b315b" }}>おつかれさまでした</p>
           <p style={{ margin: "8px 0 0", color: "#333" }}>
             {n}問終了（
-            {mode === "oni" ? "鬼問題モード" : mode === "recent_wrong" ? "直近の間違い" : `領域：${domain}`}
+            {mode === "oni" ? oniLineLabel : mode === "recent_wrong" ? "直近の間違い" : `領域：${domain}`}
             ）
           </p>
         </div>
@@ -471,7 +509,7 @@ function SessionPageInner() {
           : `基本修行（${questions.length}問）`}
       </h1>
       <p style={{ margin: "0 0 12px", fontSize: 13, color: "#555" }}>
-        {mode === "oni" ? "鬼問題モード" : mode === "recent_wrong" ? "直近1週間の間違い" : `領域：${domain}`}
+        {mode === "oni" ? oniLineLabel : mode === "recent_wrong" ? "直近1週間の間違い" : `領域：${domain}`}
       </p>
       <SessionProgressBar current={idx + 1} total={questions.length} />
 
@@ -556,7 +594,7 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-/** 試練モード用: タグ偏り調整なしで完全ランダムに n 問 */
+/** 試練（1領域指定時）: 領域内からランダムに n 問 */
 function pickRandomSubset(pool: QuestionCore[], n: number): QuestionCore[] {
   if (pool.length <= n) return shuffle([...pool]);
   return shuffle([...pool]).slice(0, n);
@@ -574,11 +612,15 @@ function questionBucketKey(q: QuestionCore): string {
  * ランダムだが「タグ（サブトピック）の偏り」を抑えて取り出す。
  * 各バケットから交互に1問ずつ取り、足りなければ残りをシャッフルして埋める。
  */
-function pickDiverseQuestions(pool: QuestionCore[], n: number): QuestionCore[] {
+function pickDiverseQuestions(
+  pool: QuestionCore[],
+  n: number,
+  bucketKey: (q: QuestionCore) => string = questionBucketKey
+): QuestionCore[] {
   if (pool.length <= n) return shuffle([...pool]);
   const buckets = new Map<string, QuestionCore[]>();
   for (const q of pool) {
-    const k = questionBucketKey(q);
+    const k = bucketKey(q);
     if (!buckets.has(k)) buckets.set(k, []);
     buckets.get(k)!.push(q);
   }
@@ -625,9 +667,13 @@ function pickAvoidingLastSession(
   pool: QuestionCore[],
   n: number,
   excludeIds: Set<string>,
-  options?: { pickStrategy?: "diverse" | "random" }
+  options?: { bucketKey?: (q: QuestionCore) => string; pickRandom?: boolean }
 ): QuestionCore[] {
-  const pickFn = options?.pickStrategy === "random" ? pickRandomSubset : pickDiverseQuestions;
+  const bucketKey = options?.bucketKey ?? questionBucketKey;
+  const pickRandom = options?.pickRandom ?? false;
+  const pickFn = pickRandom
+    ? pickRandomSubset
+    : (p: QuestionCore[], take: number) => pickDiverseQuestions(p, take, bucketKey);
   const preferred = pool.filter((q) => !excludeIds.has(q.id));
   if (preferred.length >= n) {
     return pickFn(preferred, n);
