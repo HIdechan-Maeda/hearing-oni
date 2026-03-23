@@ -185,7 +185,7 @@ function SessionPageInner() {
         }
 
         const excludeIds = readLastSessionExcludedIds();
-        const picked = pickAvoidingLastSession(pool, questionCount, excludeIds);
+        const picked = shuffle(pickAvoidingLastSession(pool, questionCount, excludeIds));
         saveLastSessionQuestionIds(picked.map((q) => q.id));
         setQuestions(picked);
         setIdx(0);
@@ -197,12 +197,19 @@ function SessionPageInner() {
       }
 
       // 通常の出題（基本修行 / 試練）
-      const { data, error } = await supabase
-        .from("questions_core")
-        .select(
-          "id,difficulty,image_url,stem,choice_a,choice_b,choice_c,choice_d,choice_e,answer,explain,tags_raw"
-        )
-        .limit(500);
+      const SELECT_CORE =
+        "id,difficulty,image_url,stem,choice_a,choice_b,choice_c,choice_d,choice_e,answer,explain,tags_raw";
+
+      // 試練モードは「先に limit 500 件 → その中から oni 抽出」だと、500 件に鬼問題がほとんど
+      // 含まれず同じ数問ばかりになることがある。DB 側で difficulty を絞ってから取得する。
+      const { data, error } =
+        mode === "oni"
+          ? await supabase
+              .from("questions_core")
+              .select(SELECT_CORE)
+              .ilike("difficulty", "oni")
+              .limit(5000)
+          : await supabase.from("questions_core").select(SELECT_CORE).limit(500);
 
       if (error) {
         setMsg("問題取得エラー: " + error.message);
@@ -219,10 +226,8 @@ function SessionPageInner() {
         (x.tags_raw ?? "").toLowerCase().includes(keyword.toLowerCase());
 
       if (mode === "oni") {
-        // 鬼問題モード: difficulty = 'oni' の問題だけを出題
-        filtered = filtered.filter(
-          (x) => (x.difficulty ?? "").toLowerCase() === "oni"
-        );
+        // 取得時に ilike('oni') 済み。念のためクライアントでも一致確認（表記ゆれ対策）
+        filtered = filtered.filter((x) => (x.difficulty ?? "").toLowerCase() === "oni");
       } else {
         // 基本修行: oni タグ付け（difficulty = 'oni'）の問題は出題しない
         filtered = filtered.filter(
@@ -248,7 +253,7 @@ function SessionPageInner() {
       }
 
       const excludeIds = readLastSessionExcludedIds();
-      const picked = pickAvoidingLastSession(filtered, questionCount, excludeIds);
+      const picked = shuffle(pickAvoidingLastSession(filtered, questionCount, excludeIds));
       saveLastSessionQuestionIds(picked.map((q) => q.id));
       setQuestions(picked);
       setIdx(0);

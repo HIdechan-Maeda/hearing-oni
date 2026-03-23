@@ -6,6 +6,7 @@ import Link from "next/link";
 import { isStudentProfileComplete } from "../lib/profileComplete";
 import { fetchProfileRow } from "../lib/fetchProfileRow";
 import { AFFILIATION_PRESETS, GRADE_OPTIONS } from "../lib/profileFieldOptions";
+import { isEmailAllowedForSignUp } from "../lib/allowedSignUpEmails";
 
 type DomainKey =
   | "all"
@@ -236,8 +237,10 @@ export default function HomePage() {
   const signUp = async () => {
     setMsg("");
     const trimmed = email.trim();
-    if (!trimmed.endsWith("@hoku-iryo-u.ac.jp")) {
-      setMsg("新規登録は学内メールアドレス（@hoku-iryo-u.ac.jp）のみ利用できます。");
+    if (!isEmailAllowedForSignUp(trimmed)) {
+      setMsg(
+        "新規登録は学内メール（@hoku-iryo-u.ac.jp）、または管理者が許可したメールアドレスのみ利用できます。浪人生など学外メールの方は担当教員にご相談ください。"
+      );
       return;
     }
     if (!password) {
@@ -288,10 +291,14 @@ export default function HomePage() {
             <h1 style={{ margin: 0, fontSize: 26, color: "#0b315b", letterSpacing: "0.04em" }}>聴覚・音響の鬼</h1>
             <p style={{ margin: "8px 0 0", fontSize: 13, color: "#5a6b7c", lineHeight: 1.5 }}>
               学内メールで新規登録してからログインしてください。
+              <br />
+              <span style={{ fontSize: 12 }}>浪人生など学外メールは、担当教員から許可されたアドレスのみ新規登録できます。</span>
             </p>
           </div>
 
-          <label style={{ display: "block", marginTop: 8, color: "#334", fontSize: 13, fontWeight: 600 }}>Email（@hoku-iryo-u.ac.jp）</label>
+          <label style={{ display: "block", marginTop: 8, color: "#334", fontSize: 13, fontWeight: 600 }}>
+            Email（学内メール／許可されたメール）
+          </label>
           <input
             className="input-elegant"
             value={email}
