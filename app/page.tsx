@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import Link from "next/link";
 import { isStudentProfileComplete } from "../lib/profileComplete";
+import { fetchProfileRow } from "../lib/fetchProfileRow";
 
 type DomainKey =
   | "all"
@@ -100,18 +101,15 @@ export default function HomePage() {
     }
     const loadProfile = async () => {
       setProfileLoaded(false);
+      setMsg("");
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
       const user = userData.user;
 
-      let { data: profile, error } = await supabase
-        .from("profiles")
-        .select("name,role,email,affiliation,grade")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      let { data: profile, error: fetchErr } = await fetchProfileRow(user.id);
 
-      if (error) {
-        setMsg("プロフィール取得エラー: " + error.message);
+      if (fetchErr && !profile) {
+        setMsg("プロフィール取得エラー: " + fetchErr.message);
         setProfileLoaded(true);
         return;
       }
@@ -124,24 +122,26 @@ export default function HomePage() {
           },
           { onConflict: "user_id" }
         );
-        if (upErr) setMsg("プロフィール初期化エラー: " + upErr.message);
-        const { data: p2 } = await supabase
-          .from("profiles")
-          .select("name,role,email,affiliation,grade")
-          .eq("user_id", user.id)
-          .maybeSingle();
-        profile = p2 ?? null;
+        if (upErr) {
+          setMsg("プロフィール初期化エラー: " + upErr.message);
+          setProfileLoaded(true);
+          return;
+        }
+        const again = await fetchProfileRow(user.id);
+        if (again.error && !again.data) {
+          setMsg("プロフィール取得エラー: " + again.error.message);
+          setProfileLoaded(true);
+          return;
+        }
+        profile = again.data;
       } else if ((profile.email ?? "") !== (user.email ?? "")) {
-        await supabase.from("profiles").upsert(
-          {
-            user_id: user.id,
-            email: user.email ?? "",
-            name: profile.name,
-            affiliation: profile.affiliation,
-            grade: profile.grade,
-          },
-          { onConflict: "user_id" }
-        );
+        const { error: updErr } = await supabase
+          .from("profiles")
+          .update({ email: user.email ?? "" })
+          .eq("user_id", user.id);
+        if (updErr) {
+          console.error(updErr);
+        }
       }
 
       const role = profile?.role ?? "";

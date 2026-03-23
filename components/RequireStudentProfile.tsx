@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
+import { fetchProfileRow } from "../lib/fetchProfileRow";
 import { isStudentProfileComplete } from "../lib/profileComplete";
 
 /**
@@ -21,11 +22,7 @@ export function RequireStudentProfile({ children }: { children: React.ReactNode 
         if (!cancelled) router.replace("/");
         return;
       }
-      const { data: p, error: perr } = await supabase
-        .from("profiles")
-        .select("name,role,affiliation,grade")
-        .eq("user_id", userData.user.id)
-        .maybeSingle();
+      const { data: p, error: perr } = await fetchProfileRow(userData.user.id);
 
       if (perr) {
         console.error(perr);
@@ -33,8 +30,13 @@ export function RequireStudentProfile({ children }: { children: React.ReactNode 
         return;
       }
 
+      if (!p) {
+        if (!cancelled) router.replace("/?needsProfile=1");
+        return;
+      }
+
       if (
-        isStudentProfileComplete(p?.role, p?.name, p?.affiliation, p?.grade)
+        isStudentProfileComplete(p.role, p.name, p.affiliation, p.grade)
       ) {
         if (!cancelled) setReady(true);
       } else {
