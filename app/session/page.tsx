@@ -26,8 +26,47 @@ const DOMAIN_KEYWORDS: Record<string, string[]> = {
   disease: ["desease", "disease", "byouki", "病気", "complex", "統合"],
 };
 
-/** 直前に開始したセッションで出題した question_id（次回は可能な限り避ける） */
+const ONI_FETCH_PAGE = 1000;
+
+/** DB の difficulty が鬼問題か（表記ゆれ対応） */
+function isOniDifficulty(difficulty: string | null | undefined): boolean {
+  const s = (difficulty ?? "").trim();
+  if (!s) return false;
+  if (s === "鬼") return true;
+  return s.toLowerCase() === "oni";
+}
+
+/**
+ * 試練（oni）用: Supabase は 1 回あたり件数に上限があるためページングで取り切る。
+ * 重要: range() だけだと行の順序が不定で、ページ間で重複・欠落が起きうるため必ず order する。
+ */
+async function fetchAllOniQuestions(select: string): Promise<{ data: QuestionCore[]; error: { message: string } | null }> {
+  const out: QuestionCore[] = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await supabase
+      .from("questions_core")
+      .select(select)
+      .ilike("difficulty", "oni")
+      .order("id", { ascending: true })
+      .range(from, from + ONI_FETCH_PAGE - 1);
+    if (error) return { data: [], error: { message: error.message } };
+    const chunk = (data ?? []) as unknown as QuestionCore[];
+    out.push(...chunk);
+    if (chunk.length < ONI_FETCH_PAGE) break;
+    from += ONI_FETCH_PAGE;
+  }
+  const filtered = out.filter((x) => isOniDifficulty(x.difficulty));
+  return { data: filtered, error: null };
+}
+
+/**
+ * 直近のセッションで出題した question_id を蓄積（次回は可能な限り避ける）
+ * ※「直前の1セッションだけ」だと、3回目にまた同じ問題群に戻るため、複数セッション分を保持する
+ */
 const LS_LAST_SESSION_QUESTION_IDS = "hearing-oni:last-session-question-ids";
+/** 保持する直近IDの上限（多めに取り、10問×10セッション程度は避けられる） */
+const MAX_RECENT_QUESTION_IDS = 200;
 
 function readLastSessionExcludedIds(): Set<string> {
   if (typeof window === "undefined") return new Set();
@@ -45,7 +84,24 @@ function readLastSessionExcludedIds(): Set<string> {
 function saveLastSessionQuestionIds(ids: string[]) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(LS_LAST_SESSION_QUESTION_IDS, JSON.stringify(ids));
+    const prevRaw = window.localStorage.getItem(LS_LAST_SESSION_QUESTION_IDS);
+    let prev: string[] = [];
+    if (prevRaw) {
+      const p = JSON.parse(prevRaw) as unknown;
+      if (Array.isArray(p)) prev = p.filter((x): x is string => typeof x === "string");
+    }
+    const merged = [...prev, ...ids];
+    // 末尾からユニークを拾い、直近 MAX 件まで（古い方から落とす）
+    const seen = new Set<string>();
+    const kept: string[] = [];
+    for (let i = merged.length - 1; i >= 0; i--) {
+      const id = merged[i];
+      if (seen.has(id)) continue;
+      seen.add(id);
+      kept.unshift(id);
+      if (kept.length >= MAX_RECENT_QUESTION_IDS) break;
+    }
+    window.localStorage.setItem(LS_LAST_SESSION_QUESTION_IDS, JSON.stringify(kept));
   } catch {
     // ストレージ満杯などは無視
   }
@@ -200,23 +256,23 @@ function SessionPageInner() {
       const SELECT_CORE =
         "id,difficulty,image_url,stem,choice_a,choice_b,choice_c,choice_d,choice_e,answer,explain,tags_raw";
 
-      // 試練モードは「先に limit 500 件 → その中から oni 抽出」だと、500 件に鬼問題がほとんど
-      // 含まれず同じ数問ばかりになることがある。DB 側で difficulty を絞ってから取得する。
-      const { data, error } =
-        mode === "oni"
-          ? await supabase
-              .from("questions_core")
-              .select(SELECT_CORE)
-              .ilike("difficulty", "oni")
-              .limit(5000)
-          : await supabase.from("questions_core").select(SELECT_CORE).limit(500);
+      let pool: QuestionCore[];
 
-      if (error) {
-        setMsg("問題取得エラー: " + error.message);
-        return;
+      if (mode === "oni") {
+        const { data: oniData, error: oniErr } = await fetchAllOniQuestions(SELECT_CORE);
+        if (oniErr) {
+          setMsg("問題取得エラー: " + oniErr.message);
+          return;
+        }
+        pool = oniData;
+      } else {
+        const { data, error } = await supabase.from("questions_core").select(SELECT_CORE).limit(500);
+        if (error) {
+          setMsg("問題取得エラー: " + error.message);
+          return;
+        }
+        pool = (data ?? []) as QuestionCore[];
       }
-
-      const pool = (data ?? []) as QuestionCore[];
       if (pool.length === 0) {
         setMsg("questions_core に問題がありません。SupabaseへCSV Importしてください。");
         return;
@@ -226,8 +282,7 @@ function SessionPageInner() {
         (x.tags_raw ?? "").toLowerCase().includes(keyword.toLowerCase());
 
       if (mode === "oni") {
-        // 取得時に ilike('oni') 済み。念のためクライアントでも一致確認（表記ゆれ対策）
-        filtered = filtered.filter((x) => (x.difficulty ?? "").toLowerCase() === "oni");
+        filtered = filtered.filter((x) => isOniDifficulty(x.difficulty));
       } else {
         // 基本修行: oni タグ付け（difficulty = 'oni'）の問題は出題しない
         filtered = filtered.filter(
@@ -253,7 +308,11 @@ function SessionPageInner() {
       }
 
       const excludeIds = readLastSessionExcludedIds();
-      const picked = shuffle(pickAvoidingLastSession(filtered, questionCount, excludeIds));
+      const picked = shuffle(
+        pickAvoidingLastSession(filtered, questionCount, excludeIds, {
+          pickStrategy: mode === "oni" ? "random" : "diverse",
+        })
+      );
       saveLastSessionQuestionIds(picked.map((q) => q.id));
       setQuestions(picked);
       setIdx(0);
@@ -497,6 +556,12 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
+/** 試練モード用: タグ偏り調整なしで完全ランダムに n 問 */
+function pickRandomSubset(pool: QuestionCore[], n: number): QuestionCore[] {
+  if (pool.length <= n) return shuffle([...pool]);
+  return shuffle([...pool]).slice(0, n);
+}
+
 /** tags_raw の先頭トークン（カンマ・セミコロン区切り）でバケット化。同じサブトピックばかり選ばれにくくする */
 function questionBucketKey(q: QuestionCore): string {
   const raw = (q.tags_raw ?? "").trim();
@@ -559,20 +624,22 @@ function pickDiverseQuestions(pool: QuestionCore[], n: number): QuestionCore[] {
 function pickAvoidingLastSession(
   pool: QuestionCore[],
   n: number,
-  excludeIds: Set<string>
+  excludeIds: Set<string>,
+  options?: { pickStrategy?: "diverse" | "random" }
 ): QuestionCore[] {
+  const pickFn = options?.pickStrategy === "random" ? pickRandomSubset : pickDiverseQuestions;
   const preferred = pool.filter((q) => !excludeIds.has(q.id));
   if (preferred.length >= n) {
-    return pickDiverseQuestions(preferred, n);
+    return pickFn(preferred, n);
   }
   if (preferred.length === 0) {
-    return pickDiverseQuestions(pool, n);
+    return pickFn(pool, n);
   }
-  const primary = pickDiverseQuestions(preferred, preferred.length);
+  const primary = pickFn(preferred, preferred.length);
   const used = new Set(primary.map((q) => q.id));
   const restPool = pool.filter((q) => !used.has(q.id));
   const need = n - primary.length;
-  const secondary = pickDiverseQuestions(restPool, need);
+  const secondary = pickFn(restPool, need);
   return [...primary, ...secondary].slice(0, n);
 }
 
