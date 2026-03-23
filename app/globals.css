@@ -113,6 +113,8 @@ main {
   border-radius: 12px;
   border: 1px solid #d4e5f7;
   background: rgba(255, 255, 255, 0.95);
+  /* 常に明るい入力面なので、ダークモードでも body の前景色を継承しない */
+  color: #0a1f3a;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 

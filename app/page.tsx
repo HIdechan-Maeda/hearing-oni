@@ -496,7 +496,7 @@ export default function HomePage() {
           >
             <h2 style={{ margin: "0 0 12px", fontSize: 15, fontWeight: 700, color: "#0b315b" }}>出題の設定</h2>
             <div style={{ marginBottom: 12 }}>
-              <label style={{ display: "block", color: "#333", marginBottom: 6, fontSize: 13, fontWeight: 600 }}>領域</label>
+              <label style={{ display: "block", color: "#0b315b", marginBottom: 6, fontSize: 13, fontWeight: 600 }}>領域</label>
               <select
                 className="input-elegant"
                 value={domain}
@@ -508,7 +508,7 @@ export default function HomePage() {
               </select>
             </div>
             <div>
-              <label style={{ display: "block", color: "#333", marginBottom: 6, fontSize: 13, fontWeight: 600 }}>1セットの出題数</label>
+              <label style={{ display: "block", color: "#0b315b", marginBottom: 6, fontSize: 13, fontWeight: 600 }}>1セットの出題数</label>
               <select
                 className="input-elegant"
                 value={questionCount}
