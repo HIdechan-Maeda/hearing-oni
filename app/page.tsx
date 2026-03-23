@@ -145,7 +145,7 @@ export default function HomePage() {
       }
 
       const role = profile?.role ?? "";
-      setIsTeacher(role === "teacher");
+      setIsTeacher(role.trim().toLowerCase() === "teacher");
 
       setNickname((profile?.name ?? "").trim());
       const aff = (profile?.affiliation ?? "").trim();
@@ -180,6 +180,15 @@ export default function HomePage() {
   const saveStudentProfile = async () => {
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) return;
+    const { data: roleRow } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("user_id", userData.user.id)
+      .maybeSingle();
+    if ((roleRow?.role ?? "").trim().toLowerCase() === "teacher") {
+      setMsg("");
+      return;
+    }
     const n = nickname.trim();
     const a = effectiveAffiliation;
     const g = effectiveGrade;
@@ -331,6 +340,21 @@ export default function HomePage() {
 
           {msg && <p style={{ color: "#b00", marginTop: 10, whiteSpace: "pre-wrap" }}>{msg}</p>}
         </section>
+      ) : !profileLoaded ? (
+        <section
+          style={{
+            width: "100%",
+            maxWidth: 420,
+            padding: 24,
+            borderRadius: 20,
+            background: "rgba(255,255,255,0.98)",
+            boxShadow: "0 18px 45px rgba(0,0,0,0.25)",
+            textAlign: "center",
+            color: "#000",
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 16 }}>プロフィールを読み込み中です…</p>
+        </section>
       ) : showStudentGate ? (
         <section
           style={{
@@ -455,7 +479,7 @@ export default function HomePage() {
             </div>
           )}
 
-          {!isTeacher && (
+          {!isTeacher && profileLoaded && (
             <div style={{ marginTop: 8, marginBottom: 10 }}>
               <label style={{ display: "block", color: "#000", marginBottom: 6, fontWeight: 600 }}>ニックネーム</label>
               <input

@@ -7,7 +7,7 @@ export function isStudentProfileComplete(
   affiliation: string | null | undefined,
   grade: string | null | undefined
 ): boolean {
-  if ((role ?? "").trim() === "teacher") return true;
+  if ((role ?? "").trim().toLowerCase() === "teacher") return true;
   const n = (name ?? "").trim();
   const a = (affiliation ?? "").trim();
   const g = (grade ?? "").trim();

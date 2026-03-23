@@ -82,7 +82,8 @@ export default function TeacherDashboardPage() {
         return;
       }
 
-      if (!myProfile || myProfile.role !== "teacher") {
+      const isTeacherRole = (myProfile?.role ?? "").trim().toLowerCase() === "teacher";
+      if (!myProfile || !isTeacherRole) {
         setMsg("教師権限が必要です。profiles.role = 'teacher' に設定してください。");
         setLoading(false);
         return;
