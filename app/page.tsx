@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabaseClient";
 import Link from "next/link";
 import { isStudentProfileComplete } from "../lib/profileComplete";
 import { fetchProfileRow } from "../lib/fetchProfileRow";
+import { AFFILIATION_PRESETS, GRADE_OPTIONS } from "../lib/profileFieldOptions";
 
 type DomainKey =
   | "all"
@@ -34,12 +35,6 @@ const DOMAIN_OPTIONS: Array<{ key: DomainKey; label: string }> = [
   { key: "information_support", label: "情報保障（information support）" },
   { key: "development", label: "療育・発達（development）" },
 ];
-
-/** 学年（1〜4年・既卒） */
-const GRADE_OPTIONS = ["1年", "2年", "3年", "4年", "既卒"] as const;
-
-/** 所属（北海道医療大学を既定、「その他」は自由記入） */
-const AFFILIATION_PRESETS = ["北海道医療大学", "その他"] as const;
 
 export default function HomePage() {
   const [email, setEmail] = useState("");
@@ -564,6 +559,7 @@ export default function HomePage() {
             <Link href="/review" style={linkBtnStyle}>復習（キュー）</Link>
             <Link href="/logs" style={linkBtnStyle}>日々の学習成果</Link>
             <Link href="/dashboard" style={linkBtnStyle}>正答率グラフ</Link>
+            {!isTeacher && <Link href="/ranking" style={linkBtnStyle}>ランキング（所属・学年）</Link>}
             {isTeacher && (
               <Link href="/teacher" style={linkBtnStyle}>教師ダッシュボード</Link>
             )}

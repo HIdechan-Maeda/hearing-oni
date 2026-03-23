@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
+import { AFFILIATION_PRESETS, GRADE_OPTIONS } from "../../lib/profileFieldOptions";
 
 type DomainKey =
   | "anatomy"
@@ -50,10 +51,26 @@ type ProfileRow = {
   grade?: string | null;
 };
 
+type RankRow = {
+  rank: number;
+  user_id: string;
+  display_name: string;
+  total_answered: number;
+  total_correct: number;
+  accuracy_pct: number;
+};
+
 export default function TeacherDashboardPage() {
   const [rows, setRows] = useState<UserRow[]>([]);
   const [msg, setMsg] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
+
+  const [rankAff, setRankAff] = useState("");
+  const [rankAffOther, setRankAffOther] = useState("");
+  const [rankGrade, setRankGrade] = useState("");
+  const [rankRows, setRankRows] = useState<RankRow[]>([]);
+  const [rankMsg, setRankMsg] = useState("");
+  const [rankLoading, setRankLoading] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -178,6 +195,53 @@ export default function TeacherDashboardPage() {
     load();
   }, []);
 
+  const loadRanking = async () => {
+    setRankMsg("");
+    const effAff =
+      rankAff === "その他" ? rankAffOther.trim() : rankAff.trim();
+    const effGrade = rankGrade.trim();
+    if (!effAff || !effGrade) {
+      setRankMsg("所属・学年を選択してください。「その他」の場合は所属名も入力してください。");
+      return;
+    }
+    setRankLoading(true);
+    const { data, error } = await supabase.rpc("leaderboard_cohort", {
+      p_affiliation: effAff,
+      p_grade: effGrade,
+    });
+    setRankLoading(false);
+    if (error) {
+      setRankMsg(
+        "ランキング取得エラー: " +
+          error.message +
+          "（Supabase に data/SUPABASE_leaderboard_cohort.sql を実行済みか確認してください）"
+      );
+      setRankRows([]);
+      return;
+    }
+    const list = (data ?? []) as Array<{
+      rank: number;
+      user_id: string;
+      display_name: string;
+      total_answered: number;
+      total_correct: number;
+      accuracy_pct: number;
+    }>;
+    setRankRows(
+      list.map((r) => ({
+        rank: Number(r.rank),
+        user_id: r.user_id,
+        display_name: r.display_name,
+        total_answered: Number(r.total_answered),
+        total_correct: Number(r.total_correct),
+        accuracy_pct: Number(r.accuracy_pct),
+      }))
+    );
+    if (list.length === 0) {
+      setRankMsg("この所属・学年に該当する受講生がいないか、まだ解答ログがありません。");
+    }
+  };
+
   const hasData = useMemo(() => rows.length > 0, [rows.length]);
 
   return (
@@ -238,6 +302,79 @@ export default function TeacherDashboardPage() {
 
       {!loading && !hasData && !msg && <p>まだログがありません。</p>}
 
+      <hr style={{ margin: "28px 0" }} />
+      <h2 style={{ fontSize: 18, marginBottom: 8 }}>ランキング（所属・学年グループ別）</h2>
+      <p style={{ fontSize: 13, color: "#444", marginTop: 0 }}>
+        受講生のプロフィールに登録された所属・学年が一致するグループ内で、正解数・正答率の順位を表示します。
+      </p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginBottom: 10 }}>
+        <div>
+          <div style={{ fontSize: 12, marginBottom: 4 }}>所属</div>
+          <select
+            value={rankAff}
+            onChange={(e) => {
+              setRankAff(e.target.value);
+              if (e.target.value !== "その他") setRankAffOther("");
+            }}
+            style={{ padding: 8, minWidth: 180 }}
+          >
+            <option value="">選択</option>
+            {AFFILIATION_PRESETS.map((a) => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+        </div>
+        {rankAff === "その他" && (
+          <div>
+            <div style={{ fontSize: 12, marginBottom: 4 }}>所属（記入）</div>
+            <input
+              value={rankAffOther}
+              onChange={(e) => setRankAffOther(e.target.value)}
+              placeholder="所属名"
+              style={{ padding: 8, width: 200 }}
+            />
+          </div>
+        )}
+        <div>
+          <div style={{ fontSize: 12, marginBottom: 4 }}>学年</div>
+          <select value={rankGrade} onChange={(e) => setRankGrade(e.target.value)} style={{ padding: 8, minWidth: 100 }}>
+            <option value="">選択</option>
+            {GRADE_OPTIONS.map((g) => (
+              <option key={g} value={g}>{g}</option>
+            ))}
+          </select>
+        </div>
+        <button type="button" onClick={loadRanking} disabled={rankLoading} style={{ padding: "8px 16px", cursor: "pointer" }}>
+          {rankLoading ? "取得中..." : "ランキングを表示"}
+        </button>
+      </div>
+      {rankMsg && <p style={{ color: "#b00", fontSize: 13, whiteSpace: "pre-wrap" }}>{rankMsg}</p>}
+      {!rankLoading && rankRows.length > 0 && (
+        <div style={{ overflowX: "auto", marginTop: 8 }}>
+          <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 520, fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: "#f5f5f5" }}>
+                <th style={thStyle}>順位</th>
+                <th style={thStyle}>ニックネーム</th>
+                <th style={{ ...thStyle, textAlign: "right" }}>正解数</th>
+                <th style={{ ...thStyle, textAlign: "right" }}>解答数</th>
+                <th style={{ ...thStyle, textAlign: "right" }}>正答率</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rankRows.map((r) => (
+                <tr key={r.user_id}>
+                  <td style={tdStyle}>{r.rank}</td>
+                  <td style={tdStyle}>{r.display_name}</td>
+                  <td style={{ ...tdStyle, textAlign: "right" }}>{r.total_correct}</td>
+                  <td style={{ ...tdStyle, textAlign: "right" }}>{r.total_answered}</td>
+                  <td style={{ ...tdStyle, textAlign: "right" }}>{r.accuracy_pct}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       <hr style={{ margin: "18px 0" }} />
       <Link href="/" style={{ textDecoration: "none" }}>
         ホームへ
