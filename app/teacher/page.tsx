@@ -245,7 +245,7 @@ export default function TeacherDashboardPage() {
   const hasData = useMemo(() => rows.length > 0, [rows.length]);
 
   return (
-    <main style={{ maxWidth: 960, margin: "0 auto", padding: 16 }}>
+    <main className="teacher-dashboard">
       <h1>教師ダッシュボード（領域別 正答率）</h1>
 
       {msg && <p style={{ color: "#b00", whiteSpace: "pre-wrap" }}>{msg}</p>}
@@ -271,9 +271,9 @@ export default function TeacherDashboardPage() {
                   <td style={tdStyle}>
                     <div>
                       <div>{row.name ?? "(名前未設定)"}</div>
-                      <div style={{ color: "#000", fontSize: 12 }}>{row.email}</div>
+                      <div style={{ color: "#1a2d42", fontSize: 12 }}>{row.email}</div>
                       {(row.affiliation || row.grade) && (
-                        <div style={{ color: "#333", fontSize: 12, marginTop: 4 }}>
+                        <div style={{ color: "#2a3f55", fontSize: 12, marginTop: 4 }}>
                           {row.affiliation && <span>所属: {row.affiliation}</span>}
                           {row.affiliation && row.grade && " ／ "}
                           {row.grade && <span>学年: {row.grade}</span>}
@@ -304,19 +304,20 @@ export default function TeacherDashboardPage() {
 
       <hr style={{ margin: "28px 0" }} />
       <h2 style={{ fontSize: 18, marginBottom: 8 }}>ランキング（所属・学年グループ別）</h2>
-      <p style={{ fontSize: 13, color: "#444", marginTop: 0 }}>
+      <p style={{ fontSize: 13, color: "#2a3f55", marginTop: 0 }}>
         受講生のプロフィールに登録された所属・学年が一致するグループ内で、正解数・正答率の順位を表示します。
       </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginBottom: 10 }}>
         <div>
-          <div style={{ fontSize: 12, marginBottom: 4 }}>所属</div>
+          <div style={{ fontSize: 12, marginBottom: 4, fontWeight: 600, color: "#0b315b" }}>所属</div>
           <select
+            className="input-elegant"
             value={rankAff}
             onChange={(e) => {
               setRankAff(e.target.value);
               if (e.target.value !== "その他") setRankAffOther("");
             }}
-            style={{ padding: 8, minWidth: 180 }}
+            style={{ minWidth: 180 }}
           >
             <option value="">選択</option>
             {AFFILIATION_PRESETS.map((a) => (
@@ -326,18 +327,19 @@ export default function TeacherDashboardPage() {
         </div>
         {rankAff === "その他" && (
           <div>
-            <div style={{ fontSize: 12, marginBottom: 4 }}>所属（記入）</div>
+            <div style={{ fontSize: 12, marginBottom: 4, fontWeight: 600, color: "#0b315b" }}>所属（記入）</div>
             <input
+              className="input-elegant"
               value={rankAffOther}
               onChange={(e) => setRankAffOther(e.target.value)}
               placeholder="所属名"
-              style={{ padding: 8, width: 200 }}
+              style={{ width: 200 }}
             />
           </div>
         )}
         <div>
-          <div style={{ fontSize: 12, marginBottom: 4 }}>学年</div>
-          <select value={rankGrade} onChange={(e) => setRankGrade(e.target.value)} style={{ padding: 8, minWidth: 100 }}>
+          <div style={{ fontSize: 12, marginBottom: 4, fontWeight: 600, color: "#0b315b" }}>学年</div>
+          <select className="input-elegant" value={rankGrade} onChange={(e) => setRankGrade(e.target.value)} style={{ minWidth: 100 }}>
             <option value="">選択</option>
             {GRADE_OPTIONS.map((g) => (
               <option key={g} value={g}>{g}</option>
@@ -376,9 +378,7 @@ export default function TeacherDashboardPage() {
         </div>
       )}
       <hr style={{ margin: "18px 0" }} />
-      <Link href="/" style={{ textDecoration: "none" }}>
-        ホームへ
-      </Link>
+      <Link href="/">ホームへ</Link>
     </main>
   );
 }
@@ -389,13 +389,13 @@ const thStyle: React.CSSProperties = {
   textAlign: "left",
   background: "#fafafa",
   fontSize: 13,
-  color: "#000",
+  color: "#0a1f3a",
 };
 
 const tdStyle: React.CSSProperties = {
   borderBottom: "1px solid #eee",
   padding: 6,
   fontSize: 13,
-  color: "#000",
+  color: "#0a1f3a",
 };
 

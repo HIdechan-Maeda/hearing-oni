@@ -216,6 +216,32 @@ select.input-elegant {
   background: linear-gradient(180deg, #f0f6fd 0%, #e8f0fa 35%, #dfeaf7 100%);
 }
 
+/* 教師ダッシュボード：ダークモードでも本文・表が読めるよう明るい面＋濃い文字 */
+.teacher-dashboard {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 20px 16px 32px;
+  min-height: 100dvh;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, #f0f6fd 0%, #e8f0fa 35%, #dfeaf7 100%);
+  color: #0a1f3a;
+}
+
+.teacher-dashboard h1,
+.teacher-dashboard h2 {
+  color: #0b315b;
+}
+
+.teacher-dashboard a {
+  color: #0b4f9c;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.teacher-dashboard a:hover {
+  color: #063d7a;
+}
+
 .session-back-link {
   display: inline-flex;
   align-items: center;
