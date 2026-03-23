@@ -10,32 +10,65 @@ import { RequireStudentProfile } from "../../components/RequireStudentProfile";
 
 type Stage = "loading" | "quiz" | "feedback" | "done";
 
-// domain ごとに tags_raw 内でマッチさせるキーワード一覧
+// domain ごとに tags_raw を「カンマ等で分割したトークン」と完全一致で照合する（部分一致禁止）
+// ※ "information" を includes すると information_support や無関係な語に誤マッチする
+// ※ "acoustics" が psychoacoustics に含まれる等も防ぐ
 const DOMAIN_KEYWORDS: Record<string, string[]> = {
-  anatomy: ["anatomy"],
-  physiology: ["physiology"],
+  anatomy: ["anatomy", "解剖"],
+  physiology: ["physiology", "生理"],
   acoustics: ["acoustics"],
   psychoacoustics: ["psychoacoustics"],
   audiometry: ["audiometry"],
-  hearing_aids: ["hearing_aids", "hearing_aid"],
+  hearing_aids: ["hearing_aids", "hearing_aid", "補聴器"],
   evoked: ["evoked", "abr", "assr"],
   vestibular: ["vestibular"],
-  information_support: ["information"],
+  information_support: ["information_support", "情報保障", "information"],
   development: ["development"],
   // 病気・統合問題
   disease: ["desease", "disease", "byouki", "病気", "complex", "統合"],
 };
 
+/** 全領域試練のロビン用: 先に判定するほうが「より専用の領域」（psychoacoustics を acoustics より先） */
+const DOMAIN_BUCKET_ORDER: string[] = [
+  "psychoacoustics",
+  "information_support",
+  "hearing_aids",
+  "audiometry",
+  "evoked",
+  "vestibular",
+  "development",
+  "disease",
+  "physiology",
+  "anatomy",
+  "acoustics",
+];
+
+function parseTagTokens(tagsRaw: string | null | undefined): string[] {
+  if (!tagsRaw) return [];
+  return tagsRaw
+    .split(/[,;，、]/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+/** トークンとキーワードは完全一致のみ（大小無視）。部分一致は使わない */
+function tokenMatchesKeyword(token: string, keyword: string): boolean {
+  return token.toLowerCase() === keyword.toLowerCase();
+}
+
+function questionMatchesDomain(q: QuestionCore, domainKey: string): boolean {
+  const keywords = DOMAIN_KEYWORDS[domainKey] ?? [domainKey];
+  const tokens = parseTagTokens(q.tags_raw);
+  if (tokens.length === 0) return false;
+  return keywords.some((kw) => tokens.some((t) => tokenMatchesKeyword(t, kw)));
+}
+
 /**
  * tags_raw を DOMAIN_KEYWORDS に照らして「領域」バケットに分類（試練モードの偏り対策）
  */
 function questionDomainBucketKey(q: QuestionCore): string {
-  const raw = (q.tags_raw ?? "").toLowerCase();
-  if (!raw) return "__untagged__";
-  for (const [domain, keywords] of Object.entries(DOMAIN_KEYWORDS)) {
-    if (keywords.some((kw) => raw.includes(kw.toLowerCase()))) {
-      return domain;
-    }
+  for (const dk of DOMAIN_BUCKET_ORDER) {
+    if (questionMatchesDomain(q, dk)) return dk;
   }
   return "__other__";
 }
@@ -299,17 +332,12 @@ function SessionPageInner() {
         return;
       }
       let filtered = pool;
-      const lowerTagIncludes = (x: QuestionCore, keyword: string) =>
-        (x.tags_raw ?? "").toLowerCase().includes(keyword.toLowerCase());
 
       if (mode === "oni") {
-        // 1) 鬼問題のみ 2) 領域指定時は tags_raw で領域に合致するものだけ（基本修行と同じキーワード）
+        // 1) 鬼問題のみ 2) 領域指定時は tags のトークンが領域キーワードと完全一致するものだけ
         filtered = filtered.filter((x) => isOniDifficulty(x.difficulty));
         if (domain !== "all") {
-          const keywords = DOMAIN_KEYWORDS[domain] ?? [domain];
-          filtered = filtered.filter((x) =>
-            keywords.some((kw) => lowerTagIncludes(x, kw))
-          );
+          filtered = filtered.filter((x) => questionMatchesDomain(x, domain));
         }
       } else {
         // 基本修行: oni タグ付け（difficulty = 'oni'）の問題は出題しない
@@ -317,10 +345,7 @@ function SessionPageInner() {
           (x) => (x.difficulty ?? "").toLowerCase() !== "oni"
         );
         if (domain !== "all") {
-          const keywords = DOMAIN_KEYWORDS[domain] ?? [domain];
-          filtered = filtered.filter((x) =>
-            keywords.some((kw) => lowerTagIncludes(x, kw))
-          );
+          filtered = filtered.filter((x) => questionMatchesDomain(x, domain));
         }
       }
 
@@ -350,7 +375,17 @@ function SessionPageInner() {
         bucketKey,
         pickRandom: oniOneDomain,
       });
-      const picked = oniAllDomains ? rawPicked : shuffle(rawPicked);
+      let picked = oniAllDomains ? rawPicked : shuffle(rawPicked);
+      // 試練は必ず difficulty=oni/鬼 のみ（万一プールに混ざった場合の最終ガード）
+      if (mode === "oni") {
+        picked = picked.filter((p) => isOniDifficulty(p.difficulty));
+        if (picked.length === 0) {
+          setMsg(
+            "鬼問題（difficulty が oni または 鬼）のみ出題します。該当データが選ばれませんでした。Supabase の difficulty 列を確認してください。"
+          );
+          return;
+        }
+      }
       saveLastSessionQuestionIds(picked.map((q) => q.id));
       setQuestions(picked);
       setIdx(0);
