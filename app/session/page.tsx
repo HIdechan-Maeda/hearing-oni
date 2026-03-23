@@ -97,6 +97,29 @@ function questionDomainBucketKey(q: QuestionCore): string {
 
 const ONI_FETCH_PAGE = 1000;
 
+/**
+ * 基本修行で領域指定ありのとき: limit(500) だとその500件に領域一致が1件しかなく1問で終了するため、全件をページング取得する。
+ */
+async function fetchAllQuestionsCorePaged(
+  select: string
+): Promise<{ data: QuestionCore[]; error: { message: string } | null }> {
+  const out: QuestionCore[] = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await supabase
+      .from("questions_core")
+      .select(select)
+      .order("id", { ascending: true })
+      .range(from, from + ONI_FETCH_PAGE - 1);
+    if (error) return { data: [], error: { message: error.message } };
+    const chunk = (data ?? []) as unknown as QuestionCore[];
+    out.push(...chunk);
+    if (chunk.length < ONI_FETCH_PAGE) break;
+    from += ONI_FETCH_PAGE;
+  }
+  return { data: out, error: null };
+}
+
 /** DB の difficulty が鬼問題か（表記ゆれ対応） */
 function isOniDifficulty(difficulty: string | null | undefined): boolean {
   const s = (difficulty ?? "").trim();
@@ -340,6 +363,14 @@ function SessionPageInner() {
           return;
         }
         pool = oniData;
+      } else if (domain !== "all") {
+        const { data: allCore, error: pageErr } = await fetchAllQuestionsCorePaged(SELECT_CORE);
+        if (cancelled) return;
+        if (pageErr) {
+          if (!cancelled) setMsg("問題取得エラー: " + pageErr.message);
+          return;
+        }
+        pool = allCore;
       } else {
         const { data, error } = await supabase.from("questions_core").select(SELECT_CORE).limit(500);
         if (cancelled) return;
