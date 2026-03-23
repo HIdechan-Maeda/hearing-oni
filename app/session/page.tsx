@@ -2,13 +2,35 @@
 
 export const dynamic = "force-dynamic";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import type { Choice, QuestionCore } from "../../types";
 import Link from "next/link";
 import { RequireStudentProfile } from "../../components/RequireStudentProfile";
 
 type Stage = "loading" | "quiz" | "feedback" | "done";
+
+/** URL の ?domain=&mode=&count= と #anatomy / #domain=anatomy を解釈（試練で領域が効かないバグ対策：layout で先に state へ載せる） */
+function parseSessionLocation(): { domain: string; mode: string; count: 5 | 10 | 20 } {
+  if (typeof window === "undefined") {
+    return { domain: "all", mode: "", count: 10 };
+  }
+  const sp = new URLSearchParams(window.location.search);
+  let d = (sp.get("domain") ?? "all").trim() || "all";
+  const m = (sp.get("mode") ?? "").trim();
+  const rawCount = Number(sp.get("count") ?? "10");
+  const qc: 5 | 10 | 20 =
+    rawCount === 5 || rawCount === 10 || rawCount === 20 ? (rawCount as 5 | 10 | 20) : 10;
+  const h = window.location.hash.replace(/^#/, "").trim();
+  if (d === "all" && h) {
+    if (h.startsWith("domain=")) {
+      d = h.slice("domain=".length).trim() || "all";
+    } else if (/^[a-z_]+$/.test(h)) {
+      d = h;
+    }
+  }
+  return { domain: d, mode: m, count: qc };
+}
 
 // domain ごとに tags_raw を「カンマ等で分割したトークン」と完全一致で照合する（部分一致禁止）
 // ※ "information" を includes すると information_support や無関係な語に誤マッチする
@@ -222,24 +244,21 @@ function SessionPageInner() {
       : `鬼問題モード（領域：${domain}）`;
   }, [mode, domain]);
 
-  // 初回マウント時に URL からクエリパラメータを読む（useSearchParams を使わない）
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const sp = new URLSearchParams(window.location.search);
-    const d = (sp.get("domain") ?? "all").trim();
-    const m = (sp.get("mode") ?? "").trim();
-    const rawCount = Number(sp.get("count") ?? "10");
-    const qc: 5 | 10 | 20 =
-      rawCount === 5 || rawCount === 10 || rawCount === 20 ? (rawCount as 5 | 10 | 20) : 10;
-    setDomain(d || "all");
+  // useEffect(load) より先に URL を state へ載せないと、mode が空のまま基本修行プールが走り領域フィルタも効かない
+  useLayoutEffect(() => {
+    const { domain: d, mode: m, count: qc } = parseSessionLocation();
+    setDomain(d);
     setMode(m);
     setQuestionCount(qc);
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
     const load = async () => {
       setMsg("");
       const { data: sess } = await supabase.auth.getSession();
+      if (cancelled) return;
       if (!sess.session) {
         setMsg("ログインしてください。");
         setStage("loading");
@@ -262,7 +281,7 @@ function SessionPageInner() {
           .limit(200);
 
         if (wrongErr) {
-          setMsg("復習用ログ取得エラー: " + wrongErr.message);
+          if (!cancelled) setMsg("復習用ログ取得エラー: " + wrongErr.message);
           return;
         }
 
@@ -271,7 +290,7 @@ function SessionPageInner() {
         );
 
         if (ids.length === 0) {
-          setMsg("直近1週間で間違えた問題がありません。");
+          if (!cancelled) setMsg("直近1週間で間違えた問題がありません。");
           return;
         }
 
@@ -284,18 +303,19 @@ function SessionPageInner() {
           .limit(200);
 
         if (qerr) {
-          setMsg("問題取得エラー: " + qerr.message);
+          if (!cancelled) setMsg("問題取得エラー: " + qerr.message);
           return;
         }
 
         const pool = (qs ?? []) as QuestionCore[];
         if (pool.length === 0) {
-          setMsg("直近1週間で間違えた問題が見つかりません。");
+          if (!cancelled) setMsg("直近1週間で間違えた問題が見つかりません。");
           return;
         }
 
         const excludeIds = readLastSessionExcludedIds();
         const picked = shuffle(pickAvoidingLastSession(pool, questionCount, excludeIds));
+        if (cancelled) return;
         saveLastSessionQuestionIds(picked.map((q) => q.id));
         setQuestions(picked);
         setIdx(0);
@@ -314,21 +334,23 @@ function SessionPageInner() {
 
       if (mode === "oni") {
         const { data: oniData, error: oniErr } = await fetchAllOniQuestions(SELECT_CORE);
+        if (cancelled) return;
         if (oniErr) {
-          setMsg("問題取得エラー: " + oniErr.message);
+          if (!cancelled) setMsg("問題取得エラー: " + oniErr.message);
           return;
         }
         pool = oniData;
       } else {
         const { data, error } = await supabase.from("questions_core").select(SELECT_CORE).limit(500);
+        if (cancelled) return;
         if (error) {
-          setMsg("問題取得エラー: " + error.message);
+          if (!cancelled) setMsg("問題取得エラー: " + error.message);
           return;
         }
         pool = (data ?? []) as QuestionCore[];
       }
       if (pool.length === 0) {
-        setMsg("questions_core に問題がありません。SupabaseへCSV Importしてください。");
+        if (!cancelled) setMsg("questions_core に問題がありません。SupabaseへCSV Importしてください。");
         return;
       }
       let filtered = pool;
@@ -350,6 +372,7 @@ function SessionPageInner() {
       }
 
       if (filtered.length === 0) {
+        if (cancelled) return;
         const label =
           mode === "oni"
             ? domain === "all"
@@ -380,12 +403,15 @@ function SessionPageInner() {
       if (mode === "oni") {
         picked = picked.filter((p) => isOniDifficulty(p.difficulty));
         if (picked.length === 0) {
-          setMsg(
-            "鬼問題（difficulty が oni または 鬼）のみ出題します。該当データが選ばれませんでした。Supabase の difficulty 列を確認してください。"
-          );
+          if (!cancelled) {
+            setMsg(
+              "鬼問題（difficulty が oni または 鬼）のみ出題します。該当データが選ばれませんでした。Supabase の difficulty 列を確認してください。"
+            );
+          }
           return;
         }
       }
+      if (cancelled) return;
       saveLastSessionQuestionIds(picked.map((q) => q.id));
       setQuestions(picked);
       setIdx(0);
@@ -396,6 +422,9 @@ function SessionPageInner() {
     };
 
     load();
+    return () => {
+      cancelled = true;
+    };
     // domain / mode / 出題数 が変わったら新セッション
   }, [domain, mode, questionCount]);
 
