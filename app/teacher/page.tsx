@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
 import { AFFILIATION_PRESETS, GRADE_OPTIONS } from "../../lib/profileFieldOptions";
+import { fetchProfilesBatch, type ProfileRowLite } from "../../lib/fetchProfilesBatch";
 
 type DomainKey =
   | "anatomy"
@@ -126,20 +127,19 @@ export default function TeacherDashboardPage() {
 
       const userIds = Array.from(new Set(logs.map((l: any) => l.user_id).filter(Boolean)));
 
-      const { data: profiles, error: allProfErr } = await supabase
-        .from("profiles")
-        .select("user_id,email,name,affiliation,grade")
-        .in("user_id", userIds)
-        .returns<ProfileRow[]>();
-
-      if (allProfErr) {
-        setMsg("受講生プロフィール取得エラー: " + allProfErr.message);
+      const { profiles: profileList, error: batchErr } = await fetchProfilesBatch(userIds);
+      if (batchErr) {
+        setMsg(
+          "受講生プロフィール取得エラー: " +
+            batchErr +
+            "\n\n※ ログに出ている user が非常に多い場合は、.in() の件数制限で失敗することがあります（バッチ取得に変更済み）。affiliation / grade カラムが無い場合は name のみで取得します。"
+        );
         setLoading(false);
         return;
       }
 
-      const profileMap = new Map<string, ProfileRow>();
-      for (const p of profiles ?? []) {
+      const profileMap = new Map<string, ProfileRowLite>();
+      for (const p of profileList) {
         profileMap.set(p.user_id, p);
       }
 
