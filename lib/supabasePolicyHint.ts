@@ -31,3 +31,17 @@ export function supabaseSchemaHint(message: string): string {
 export function supabaseProfileErrorHints(message: string): string {
   return supabaseRlsHint(message) + supabaseSchemaHint(message);
 }
+
+/** leaderboard_cohort RPC 失敗時（関数未作成・RLS・スキーマキャッシュ） */
+export function supabaseLeaderboardRpcHint(message: string): string {
+  let s = "";
+  if (/function|does not exist|PGRST202|schema cache|42883/i.test(message)) {
+    s +=
+      " SQL Editor で data/SUPABASE_leaderboard_cohort.sql を実行し、必要なら Dashboard → Settings → API でスキーマを再読み込みしてください。";
+  }
+  if (/row-level security|permission denied|42501|relation\s+\"logs\"|table\s+logs/i.test(message)) {
+    s +=
+      " 同じ SQL を再実行し、関数内の set_config('row_security','off') が入っているか確認してください（logs の RLS で失敗することがあります）。";
+  }
+  return s;
+}

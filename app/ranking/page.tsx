@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
 import { RequireStudentProfile } from "../../components/RequireStudentProfile";
 import { fetchProfileRow } from "../../lib/fetchProfileRow";
+import { formatSupabaseError, supabaseLeaderboardRpcHint } from "../../lib/supabasePolicyHint";
 
 export type LeaderboardRpcRow = {
   rank: number;
@@ -57,8 +58,8 @@ function RankingPageInner() {
       if (error) {
         setMsg(
           "ランキング取得エラー: " +
-            error.message +
-            "\n\n※ Supabase で data/SUPABASE_leaderboard_cohort.sql を実行してください。"
+            formatSupabaseError(error) +
+            supabaseLeaderboardRpcHint(error.message)
         );
         setLoading(false);
         return;

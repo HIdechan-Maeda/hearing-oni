@@ -5,7 +5,11 @@ import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
 import { AFFILIATION_PRESETS, GRADE_OPTIONS } from "../../lib/profileFieldOptions";
 import { fetchProfilesBatch, type ProfileRowLite } from "../../lib/fetchProfilesBatch";
-import { formatSupabaseError, supabaseProfileErrorHints } from "../../lib/supabasePolicyHint";
+import {
+  formatSupabaseError,
+  supabaseLeaderboardRpcHint,
+  supabaseProfileErrorHints,
+} from "../../lib/supabasePolicyHint";
 
 type DomainKey =
   | "anatomy"
@@ -216,8 +220,8 @@ export default function TeacherDashboardPage() {
     if (error) {
       setRankMsg(
         "ランキング取得エラー: " +
-          error.message +
-          "（Supabase に data/SUPABASE_leaderboard_cohort.sql を実行済みか確認してください）"
+          formatSupabaseError(error) +
+          supabaseLeaderboardRpcHint(error.message)
       );
       setRankRows([]);
       return;

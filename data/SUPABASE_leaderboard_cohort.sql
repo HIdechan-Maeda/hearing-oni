@@ -22,10 +22,16 @@ DECLARE
   v_grade text;
   v_is_teacher boolean := false;
 BEGIN
-  SELECT (lower(trim(COALESCE(role, ''))) = 'teacher')
-  INTO v_is_teacher
-  FROM public.profiles
-  WHERE user_id = auth.uid();
+  -- RLS が有効な logs / profiles でも集計できるよう、関数内だけ行セキュリティを無効化
+  PERFORM set_config('row_security', 'off', true);
+
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.profiles
+    WHERE user_id = auth.uid()
+      AND lower(trim(coalesce(role, ''))) = 'teacher'
+  )
+  INTO v_is_teacher;
 
   IF v_is_teacher THEN
     v_aff := NULLIF(trim(COALESCE(p_affiliation, '')), '');
