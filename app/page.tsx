@@ -12,6 +12,7 @@ import {
   normalizeGradeFromDb,
 } from "../lib/profileFieldOptions";
 import { isEmailAllowedForSignUp } from "../lib/allowedSignUpEmails";
+import { formatSupabaseError, supabaseProfileErrorHints } from "../lib/supabasePolicyHint";
 
 type DomainKey =
   | "all"
@@ -60,6 +61,8 @@ export default function HomePage() {
   const [isTeacher, setIsTeacher] = useState(false);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const prevUserEmailRef = useRef<string | null>(null);
+  /** loadProfile の非同期完了が保存より後に来て古い値で上書きしないよう世代で無効化 */
+  const profileFetchGenerationRef = useRef(0);
 
   useEffect(() => {
     const savedDomain = window.localStorage.getItem("hearing_oni_domain");
@@ -109,14 +112,18 @@ export default function HomePage() {
       // ログイン先が変わったときだけ「読み込み中」に戻す（毎回 false にすると保存直後にフォームが消えて値が戻るように見える）
       if (userChanged) setProfileLoaded(false);
       setMsg("");
+      const gen = ++profileFetchGenerationRef.current;
       const { data: userData } = await supabase.auth.getUser();
+      if (gen !== profileFetchGenerationRef.current) return;
       if (!userData.user) return;
       const user = userData.user;
 
       let { data: profile, error: fetchErr } = await fetchProfileRow(user.id);
+      if (gen !== profileFetchGenerationRef.current) return;
 
       if (fetchErr && !profile) {
-        setMsg("プロフィール取得エラー: " + fetchErr.message);
+        if (gen !== profileFetchGenerationRef.current) return;
+        setMsg("プロフィール取得エラー: " + fetchErr.message + supabaseProfileErrorHints(fetchErr.message));
         setProfileLoaded(true);
         return;
       }
@@ -129,14 +136,20 @@ export default function HomePage() {
           },
           { onConflict: "user_id" }
         );
+        if (gen !== profileFetchGenerationRef.current) return;
         if (upErr) {
-          setMsg("プロフィール初期化エラー: " + upErr.message);
+          setMsg(
+            "プロフィール初期化エラー: " + formatSupabaseError(upErr) + supabaseProfileErrorHints(upErr.message)
+          );
           setProfileLoaded(true);
           return;
         }
         const again = await fetchProfileRow(user.id);
+        if (gen !== profileFetchGenerationRef.current) return;
         if (again.error && !again.data) {
-          setMsg("プロフィール取得エラー: " + again.error.message);
+          setMsg(
+            "プロフィール取得エラー: " + again.error.message + supabaseProfileErrorHints(again.error.message)
+          );
           setProfileLoaded(true);
           return;
         }
@@ -149,8 +162,10 @@ export default function HomePage() {
         if (updErr) {
           console.error(updErr);
         }
+        if (gen !== profileFetchGenerationRef.current) return;
       }
 
+      if (gen !== profileFetchGenerationRef.current) return;
       const role = profile?.role ?? "";
       setIsTeacher(role.trim().toLowerCase() === "teacher");
 
@@ -216,14 +231,16 @@ export default function HomePage() {
     );
     setProfileSaving(false);
     if (error) {
-      setMsg("プロフィール保存エラー: " + error.message);
+      setMsg("プロフィール保存エラー: " + formatSupabaseError(error) + supabaseProfileErrorHints(error.message));
       return;
     }
+    // 保存完了後に遅れて終わる loadProfile が古い行で上書きしないよう世代を進める
+    profileFetchGenerationRef.current += 1;
     const { data: refreshed, error: refErr } = await fetchProfileRow(userData.user.id);
     if (refErr || !refreshed) {
       setMsg(
         "保存は完了しましたが、再取得に失敗しました。表示が古い場合はページを再読み込みしてください。" +
-          (refErr ? `（${refErr.message}）` : "")
+          (refErr ? `（${refErr.message}${supabaseProfileErrorHints(refErr.message)}）` : "")
       );
       return;
     }

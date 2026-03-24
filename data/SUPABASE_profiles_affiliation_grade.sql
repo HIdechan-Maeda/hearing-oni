@@ -9,3 +9,6 @@ ALTER TABLE public.profiles
 
 COMMENT ON COLUMN public.profiles.affiliation IS '所属（学科・クラス等）';
 COMMENT ON COLUMN public.profiles.grade IS '学年（例: 3年）';
+
+-- プロフィール取得・保存で RLS エラーが出る場合は、同じく SQL Editor で
+-- data/SUPABASE_RLS_profiles.sql を実行してください。

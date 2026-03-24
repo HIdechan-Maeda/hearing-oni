@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient";
+import { formatSupabaseError } from "./supabasePolicyHint";
 
 export type ProfileRow = {
   name: string | null;
@@ -32,10 +33,13 @@ export async function fetchProfileRow(
     .maybeSingle();
 
   if (minimal.error) {
-    return { data: null, error: new Error(minimal.error.message) };
+    return { data: null, error: new Error(formatSupabaseError(minimal.error)) };
   }
   if (!minimal.data) {
-    return { data: null, error: full.error ? new Error(full.error.message) : null };
+    return {
+      data: null,
+      error: full.error ? new Error(formatSupabaseError(full.error)) : null,
+    };
   }
   return {
     data: {

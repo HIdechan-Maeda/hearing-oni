@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
 import { AFFILIATION_PRESETS, GRADE_OPTIONS } from "../../lib/profileFieldOptions";
 import { fetchProfilesBatch, type ProfileRowLite } from "../../lib/fetchProfilesBatch";
+import { formatSupabaseError, supabaseProfileErrorHints } from "../../lib/supabasePolicyHint";
 
 type DomainKey =
   | "anatomy"
@@ -95,7 +96,9 @@ export default function TeacherDashboardPage() {
         .maybeSingle<ProfileRow>();
 
       if (profErr) {
-        setMsg("プロフィール取得エラー: " + profErr.message);
+        setMsg(
+          "プロフィール取得エラー: " + formatSupabaseError(profErr) + supabaseProfileErrorHints(profErr.message)
+        );
         setLoading(false);
         return;
       }

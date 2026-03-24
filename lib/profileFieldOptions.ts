@@ -11,6 +11,8 @@ export function normalizeGradeFromDb(raw: string | null | undefined): string {
   if (GRADE_OPTIONS.includes(t as (typeof GRADE_OPTIONS)[number])) return t;
   const nfkc = t.normalize("NFKC");
   if (GRADE_OPTIONS.includes(nfkc as (typeof GRADE_OPTIONS)[number])) return nfkc;
+  const yearStudent = nfkc.match(/^([1-4])年生$/);
+  if (yearStudent) return `${yearStudent[1]}年` as (typeof GRADE_OPTIONS)[number];
   const aliases: Record<string, string> = {
     "1": "1年",
     "2": "2年",
