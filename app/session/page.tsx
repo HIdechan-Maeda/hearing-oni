@@ -36,8 +36,9 @@ function parseSessionLocation(): { domain: string; mode: string; count: 5 | 10 |
 // ※ "information" を includes すると information_support や無関係な語に誤マッチする
 // ※ "acoustics" が psychoacoustics に含まれる等も防ぐ
 const DOMAIN_KEYWORDS: Record<string, string[]> = {
-  anatomy: ["anatomy", "解剖"],
-  physiology: ["physiology", "生理"],
+  // CSV では anatomy/physiology のようにスラッシュ区切りの行が多い → parseTagTokens で / も分割する
+  anatomy: ["anatomy", "解剖", "解剖学", "anatomical"],
+  physiology: ["physiology", "生理", "生理学", "physiological", "phisiology"],
   acoustics: ["acoustics"],
   psychoacoustics: ["psychoacoustics"],
   audiometry: ["audiometry"],
@@ -68,14 +69,18 @@ const DOMAIN_BUCKET_ORDER: string[] = [
 function parseTagTokens(tagsRaw: string | null | undefined): string[] {
   if (!tagsRaw) return [];
   return tagsRaw
-    .split(/[,;，、]/)
+    .split(/[,;，、/|]/)
     .map((t) => t.trim())
     .filter(Boolean);
 }
 
-/** トークンとキーワードは完全一致のみ（大小無視）。部分一致は使わない */
+function normalizeTagToken(t: string): string {
+  return t.normalize("NFKC").trim().toLowerCase();
+}
+
+/** トークンとキーワードは完全一致（NFKC・大小無視）。部分一致は使わない */
 function tokenMatchesKeyword(token: string, keyword: string): boolean {
-  return token.toLowerCase() === keyword.toLowerCase();
+  return normalizeTagToken(token) === normalizeTagToken(keyword);
 }
 
 function questionMatchesDomain(q: QuestionCore, domainKey: string): boolean {

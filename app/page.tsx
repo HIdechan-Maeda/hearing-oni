@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import Link from "next/link";
 import { isStudentProfileComplete } from "../lib/profileComplete";
 import { fetchProfileRow } from "../lib/fetchProfileRow";
-import { AFFILIATION_PRESETS, GRADE_OPTIONS } from "../lib/profileFieldOptions";
+import {
+  AFFILIATION_PRESETS,
+  GRADE_OPTIONS,
+  mapAffiliationToForm,
+  normalizeGradeFromDb,
+} from "../lib/profileFieldOptions";
 import { isEmailAllowedForSignUp } from "../lib/allowedSignUpEmails";
 
 type DomainKey =
@@ -54,6 +59,7 @@ export default function HomePage() {
   const [questionCount, setQuestionCount] = useState<5 | 10 | 20>(10);
   const [isTeacher, setIsTeacher] = useState(false);
   const [profileLoaded, setProfileLoaded] = useState(false);
+  const prevUserEmailRef = useRef<string | null>(null);
 
   useEffect(() => {
     const savedDomain = window.localStorage.getItem("hearing_oni_domain");
@@ -87,6 +93,7 @@ export default function HomePage() {
   // ログイン中はプロフィールを取得
   useEffect(() => {
     if (!userEmail) {
+      prevUserEmailRef.current = null;
       setNickname("");
       setAffiliation("");
       setAffiliationOther("");
@@ -95,8 +102,12 @@ export default function HomePage() {
       setProfileLoaded(false);
       return;
     }
+    const userChanged = prevUserEmailRef.current !== userEmail;
+    prevUserEmailRef.current = userEmail;
+
     const loadProfile = async () => {
-      setProfileLoaded(false);
+      // ログイン先が変わったときだけ「読み込み中」に戻す（毎回 false にすると保存直後にフォームが消えて値が戻るように見える）
+      if (userChanged) setProfileLoaded(false);
       setMsg("");
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
@@ -144,19 +155,10 @@ export default function HomePage() {
       setIsTeacher(role.trim().toLowerCase() === "teacher");
 
       setNickname((profile?.name ?? "").trim());
-      const aff = (profile?.affiliation ?? "").trim();
-      if (aff === "北海道医療大学") {
-        setAffiliation("北海道医療大学");
-        setAffiliationOther("");
-      } else if (aff) {
-        setAffiliation("その他");
-        setAffiliationOther(aff);
-      } else {
-        setAffiliation("");
-        setAffiliationOther("");
-      }
-      const g = (profile?.grade ?? "").trim();
-      setGrade(GRADE_OPTIONS.includes(g as (typeof GRADE_OPTIONS)[number]) ? g : "");
+      const { affiliation: affSel, affiliationOther: affOther } = mapAffiliationToForm(profile?.affiliation);
+      setAffiliation(affSel);
+      setAffiliationOther(affOther);
+      setGrade(normalizeGradeFromDb(profile?.grade));
       setProfileLoaded(true);
     };
     loadProfile();
@@ -217,6 +219,19 @@ export default function HomePage() {
       setMsg("プロフィール保存エラー: " + error.message);
       return;
     }
+    const { data: refreshed, error: refErr } = await fetchProfileRow(userData.user.id);
+    if (refErr || !refreshed) {
+      setMsg(
+        "保存は完了しましたが、再取得に失敗しました。表示が古い場合はページを再読み込みしてください。" +
+          (refErr ? `（${refErr.message}）` : "")
+      );
+      return;
+    }
+    setNickname((refreshed.name ?? "").trim());
+    const affForm = mapAffiliationToForm(refreshed.affiliation);
+    setAffiliation(affForm.affiliation);
+    setAffiliationOther(affForm.affiliationOther);
+    setGrade(normalizeGradeFromDb(refreshed.grade));
     setMsg("保存しました。学習メニューから問題に進めます。");
   };
 
