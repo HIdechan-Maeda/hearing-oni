@@ -1,5 +1,6 @@
 -- 同一「所属・学年」内のランキング（解答ログの正解数ベース）
 -- Supabase SQL Editor で実行後、学生は /ranking、教師はダッシュボードから利用可能
+-- （user_id 曖昧さ対策: 関数内先頭の #variable_conflict use_column を削除しないこと）
 
 CREATE OR REPLACE FUNCTION public.leaderboard_cohort(
   p_affiliation text DEFAULT NULL,
@@ -17,6 +18,7 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
+#variable_conflict use_column
 DECLARE
   v_aff text;
   v_grade text;
@@ -27,9 +29,9 @@ BEGIN
 
   SELECT EXISTS (
     SELECT 1
-    FROM public.profiles
-    WHERE user_id = auth.uid()
-      AND lower(trim(coalesce(role, ''))) = 'teacher'
+    FROM public.profiles pf
+    WHERE pf.user_id = auth.uid()
+      AND lower(trim(coalesce(pf.role, ''))) = 'teacher'
   )
   INTO v_is_teacher;
 
@@ -38,11 +40,11 @@ BEGIN
     v_grade := NULLIF(trim(COALESCE(p_grade, '')), '');
   ELSE
     SELECT
-      NULLIF(trim(COALESCE(affiliation, '')), ''),
-      NULLIF(trim(COALESCE(grade, '')), '')
+      NULLIF(trim(COALESCE(pf.affiliation, '')), ''),
+      NULLIF(trim(COALESCE(pf.grade, '')), '')
     INTO v_aff, v_grade
-    FROM public.profiles
-    WHERE user_id = auth.uid();
+    FROM public.profiles pf
+    WHERE pf.user_id = auth.uid();
   END IF;
 
   IF v_aff IS NULL OR v_grade IS NULL THEN
