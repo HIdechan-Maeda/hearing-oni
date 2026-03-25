@@ -216,7 +216,7 @@ function SessionProgressBar({ current, total }: { current: number; total: number
           alignItems: "center",
           marginBottom: 8,
           fontSize: 13,
-          color: "#333",
+          color: "#1a1a1a",
           fontVariantNumeric: "tabular-nums",
         }}
       >
@@ -580,7 +580,7 @@ function SessionPageInner() {
           }}
         >
           <p style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "#0b315b" }}>おつかれさまでした</p>
-          <p style={{ margin: "8px 0 0", color: "#333" }}>
+          <p style={{ margin: "8px 0 0", color: "#1a1a1a" }}>
             {n}問終了（
             {mode === "oni" ? oniLineLabel : mode === "recent_wrong" ? "直近の間違い" : `領域：${domain}`}
             ）
@@ -608,7 +608,7 @@ function SessionPageInner() {
           ? `直近1週間の間違えた問題（${questions.length}問）`
           : `基本修行（${questions.length}問）`}
       </h1>
-      <p style={{ margin: "0 0 12px", fontSize: 13, color: "#555" }}>
+      <p style={{ margin: "0 0 12px", fontSize: 13, color: "#1a1a1a" }}>
         {mode === "oni" ? oniLineLabel : mode === "recent_wrong" ? "直近1週間の間違い" : `領域：${domain}`}
       </p>
       <SessionProgressBar current={idx + 1} total={questions.length} />
@@ -653,11 +653,21 @@ function SessionPageInner() {
               {isCorrect ? "正解" : "不正解"}
             </span>
           </div>
-          <p style={{ fontSize: 15, color: "#333", lineHeight: 1.65, margin: "0 0 12px" }}>
+          <p style={{ fontSize: 15, color: "#1a1a1a", lineHeight: 1.65, margin: "0 0 12px" }}>
             あなたの解答：{(q as any)[`choice_${selected?.toLowerCase()}`] ?? selected} / 正解：{(q as any)[`choice_${q.answer.toLowerCase()}`] ?? q.answer}
           </p>
           {q.explain && (
-            <p style={{ whiteSpace: "pre-wrap", padding: 14, borderRadius: 12, background: "rgba(255,255,255,0.9)", border: "1px solid #d0e3f5" }}>
+            <p
+              style={{
+                whiteSpace: "pre-wrap",
+                padding: 14,
+                borderRadius: 12,
+                background: "rgba(255,255,255,0.95)",
+                border: "1px solid #d0e3f5",
+                color: "#0f1f33",
+                lineHeight: 1.65,
+              }}
+            >
               <b>解説：</b>
               {q.explain}
             </p>

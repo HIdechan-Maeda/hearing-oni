@@ -3,6 +3,9 @@
 :root {
   --background: #ffffff;
   --foreground: #000000;
+  /* 白〜ガラス面の上の本文（グレーすぎると読みづらいので #222 前後） */
+  --text-on-light: #0f1f33;
+  --text-muted-on-light: #243a52;
   --brand-deep: #061a33;
   --brand-mid: #0d4a9c;
   --brand-bright: #2b8ef0;
@@ -91,6 +94,9 @@ main {
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(255, 255, 255, 0.5);
   box-shadow: var(--shadow-elevated);
+  /* OS がダークモードでも body の前景が薄くならないよう、明るいパネル内は常に濃い字 */
+  color: var(--text-on-light);
+  color-scheme: light;
 }
 
 .glass-panel--narrow {
@@ -214,6 +220,8 @@ select.input-elegant {
   min-height: 100dvh;
   box-sizing: border-box;
   background: linear-gradient(180deg, #f0f6fd 0%, #e8f0fa 35%, #dfeaf7 100%);
+  color: var(--text-on-light);
+  color-scheme: light;
 }
 
 /* 教師ダッシュボード：ダークモードでも本文・表が読めるよう明るい面＋濃い文字 */
@@ -375,7 +383,7 @@ select.input-elegant {
   border-radius: 12px;
   border: 1px solid #c8d8e8;
   background: linear-gradient(180deg, #fafcfe 0%, #eef3f8 100%);
-  color: #445;
+  color: #243a52;
   font-weight: 500;
   transition: background 0.2s ease, border-color 0.2s ease;
 }

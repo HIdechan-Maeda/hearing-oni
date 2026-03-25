@@ -149,7 +149,7 @@ function LogsPageInner() {
         <Link href="/" style={backStyle}>← ホームへ</Link>
       </p>
       <h1 style={{ marginTop: 0 }}>日々の学習成果</h1>
-      <p style={{ color: "#333", fontSize: 14, marginBottom: 16 }}>
+      <p style={{ color: "#1a1a1a", fontSize: 14, marginBottom: 16 }}>
         日付ごとの正答率と解答数をグラフで確認できます。解答するたびに自動で更新されます。
       </p>
 

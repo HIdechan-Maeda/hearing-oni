@@ -322,14 +322,14 @@ export default function HomePage() {
               style={{ width: 88, height: 88, borderRadius: 22, marginBottom: 10, boxShadow: "0 8px 24px rgba(0,40,100,0.15)" }}
             />
             <h1 style={{ margin: 0, fontSize: 26, color: "#0b315b", letterSpacing: "0.04em" }}>聴覚・音響の鬼</h1>
-            <p style={{ margin: "8px 0 0", fontSize: 13, color: "#5a6b7c", lineHeight: 1.5 }}>
+            <p style={{ margin: "8px 0 0", fontSize: 13, color: "#243a52", lineHeight: 1.5 }}>
               学内メールで新規登録してからログインしてください。
               <br />
               <span style={{ fontSize: 12 }}>浪人生など学外メールは、担当教員から許可されたアドレスのみ新規登録できます。</span>
             </p>
           </div>
 
-          <label style={{ display: "block", marginTop: 8, color: "#334", fontSize: 13, fontWeight: 600 }}>
+          <label style={{ display: "block", marginTop: 8, color: "#1a2030", fontSize: 13, fontWeight: 600 }}>
             Email（学内メール／許可されたメール）
           </label>
           <input
@@ -339,7 +339,7 @@ export default function HomePage() {
             placeholder="student@hoku-iryo-u.ac.jp"
           />
 
-          <label style={{ display: "block", marginTop: 12, color: "#334", fontSize: 13, fontWeight: 600 }}>Password</label>
+          <label style={{ display: "block", marginTop: 12, color: "#1a2030", fontSize: 13, fontWeight: 600 }}>Password</label>
           <input
             className="input-elegant"
             type="password"
@@ -361,17 +361,17 @@ export default function HomePage() {
         </section>
       ) : !profileLoaded ? (
         <section className="glass-panel glass-panel--narrow" style={{ textAlign: "center" }}>
-          <p style={{ margin: 0, fontSize: 16, color: "#334" }}>プロフィールを読み込み中です…</p>
+          <p style={{ margin: 0, fontSize: 16, color: "#1a2030" }}>プロフィールを読み込み中です…</p>
         </section>
       ) : showStudentGate ? (
         <section className="glass-panel glass-panel--gate">
           <h1 style={{ marginTop: 0, fontSize: 22 }}>プロフィール登録（必須）</h1>
-          <p style={{ marginTop: 0, fontSize: 14, color: "#333" }}>
+          <p style={{ marginTop: 0, fontSize: 14, color: "#1a1a1a" }}>
             成績・学習状況の管理のため、以下を入力してから学習を開始してください。
           </p>
-          <p style={{ fontSize: 13, color: "#555" }}>ログイン中：<b>{userEmail}</b></p>
+          <p style={{ fontSize: 13, color: "#1a1a1a" }}>ログイン中：<b>{userEmail}</b></p>
 
-          <label style={{ display: "block", marginTop: 14, color: "#334", fontWeight: 600, fontSize: 13 }}>ニックネーム</label>
+          <label style={{ display: "block", marginTop: 14, color: "#1a2030", fontWeight: 600, fontSize: 13 }}>ニックネーム</label>
           <input
             className="input-elegant"
             value={nickname}
@@ -380,7 +380,7 @@ export default function HomePage() {
             maxLength={50}
           />
 
-          <label style={{ display: "block", marginTop: 12, color: "#334", fontWeight: 600, fontSize: 13 }}>所属</label>
+          <label style={{ display: "block", marginTop: 12, color: "#1a2030", fontWeight: 600, fontSize: 13 }}>所属</label>
           <select
             className="input-elegant"
             value={affiliation}
@@ -405,7 +405,7 @@ export default function HomePage() {
             />
           )}
 
-          <label style={{ display: "block", marginTop: 12, color: "#334", fontWeight: 600, fontSize: 13 }}>学年</label>
+          <label style={{ display: "block", marginTop: 12, color: "#1a2030", fontWeight: 600, fontSize: 13 }}>学年</label>
           <select className="input-elegant" value={grade} onChange={(e) => setGrade(e.target.value)}>
             <option value="">選択してください</option>
             {GRADE_OPTIONS.map((g) => (
@@ -435,7 +435,7 @@ export default function HomePage() {
           <h1 style={{ marginTop: 0, marginBottom: 6, fontSize: 26, color: "#0b315b", letterSpacing: "0.02em" }}>
             聴覚・音響の鬼
           </h1>
-          <p style={{ marginTop: 0, marginBottom: 16, fontSize: 14, color: "#444" }}>
+          <p style={{ marginTop: 0, marginBottom: 16, fontSize: 14, color: "#1a1a1a" }}>
             ログイン中：<b style={{ color: "#111" }}>{userEmail}</b>
             {isTeacher && (
               <span style={{ marginLeft: 8, fontSize: 13, color: "#0b4f9c", fontWeight: 600 }}>（教師）</span>
@@ -464,7 +464,7 @@ export default function HomePage() {
               <div>
                 <b>学年</b>：{effectiveGrade}
               </div>
-              <p style={{ margin: "8px 0 0", fontSize: 12, color: "#555" }}>
+              <p style={{ margin: "8px 0 0", fontSize: 12, color: "#243a52" }}>
                 変更する場合は下の欄を編集し「プロフィールを更新」を押してください。
               </p>
             </div>
@@ -472,14 +472,14 @@ export default function HomePage() {
 
           {!isTeacher && profileLoaded && (
             <div style={{ marginTop: 8, marginBottom: 10 }}>
-              <label style={{ display: "block", color: "#334", marginBottom: 6, fontWeight: 600, fontSize: 13 }}>ニックネーム</label>
+              <label style={{ display: "block", color: "#1a2030", marginBottom: 6, fontWeight: 600, fontSize: 13 }}>ニックネーム</label>
               <input
                 className="input-elegant"
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
                 maxLength={50}
               />
-              <label style={{ display: "block", color: "#334", marginTop: 10, marginBottom: 6, fontWeight: 600, fontSize: 13 }}>所属</label>
+              <label style={{ display: "block", color: "#1a2030", marginTop: 10, marginBottom: 6, fontWeight: 600, fontSize: 13 }}>所属</label>
               <select
                 className="input-elegant"
                 value={affiliation}
@@ -504,7 +504,7 @@ export default function HomePage() {
                   style={{ marginBottom: 8 }}
                 />
               )}
-              <label style={{ display: "block", color: "#334", marginTop: 10, marginBottom: 6, fontWeight: 600, fontSize: 13 }}>学年</label>
+              <label style={{ display: "block", color: "#1a2030", marginTop: 10, marginBottom: 6, fontWeight: 600, fontSize: 13 }}>学年</label>
               <select className="input-elegant" value={grade} onChange={(e) => setGrade(e.target.value)}>
                 <option value="">選択してください</option>
                 {GRADE_OPTIONS.map((g) => (

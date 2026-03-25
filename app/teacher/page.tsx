@@ -280,7 +280,7 @@ export default function TeacherDashboardPage() {
                       <div>{row.name ?? "(名前未設定)"}</div>
                       <div style={{ color: "#1a2d42", fontSize: 12 }}>{row.email}</div>
                       {(row.affiliation || row.grade) && (
-                        <div style={{ color: "#2a3f55", fontSize: 12, marginTop: 4 }}>
+                        <div style={{ color: "#1a2d42", fontSize: 12, marginTop: 4 }}>
                           {row.affiliation && <span>所属: {row.affiliation}</span>}
                           {row.affiliation && row.grade && " ／ "}
                           {row.grade && <span>学年: {row.grade}</span>}
@@ -311,7 +311,7 @@ export default function TeacherDashboardPage() {
 
       <hr style={{ margin: "28px 0" }} />
       <h2 style={{ fontSize: 18, marginBottom: 8 }}>ランキング（所属・学年グループ別）</h2>
-      <p style={{ fontSize: 13, color: "#2a3f55", marginTop: 0 }}>
+      <p style={{ fontSize: 13, color: "#1a2d42", marginTop: 0 }}>
         受講生のプロフィールに登録された所属・学年が一致するグループ内で、正解数・正答率の順位を表示します。
       </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginBottom: 10 }}>

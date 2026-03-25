@@ -50,7 +50,7 @@ export function RequireStudentProfile({ children }: { children: React.ReactNode 
 
   if (!ready) {
     return (
-      <main style={{ maxWidth: 720, margin: "0 auto", padding: 24 }}>
+      <main style={{ maxWidth: 720, margin: "0 auto", padding: 24, color: "#0f1f33" }}>
         <p>読み込み中...</p>
       </main>
     );

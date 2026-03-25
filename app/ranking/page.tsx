@@ -96,7 +96,7 @@ function RankingPageInner() {
         </Link>
       </p>
       <h1 style={{ marginTop: 0 }}>ランキング（所属・学年のグループ内）</h1>
-      <p style={{ fontSize: 14, color: "#333" }}>
+      <p style={{ fontSize: 14, color: "#1a1a1a" }}>
         あなたと同じプロフィール（所属・学年）の受講生同士で、解答ログの正解数・正答率を比較します。
       </p>
       {cohortLabel && (
