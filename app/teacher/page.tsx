@@ -17,6 +17,7 @@ type DomainKey =
   | "acoustics"
   | "psychoacoustics"
   | "audiometry"
+  | "screening_audiometry"
   | "hearing_aids"
   | "evoked"
   | "vestibular"
@@ -28,6 +29,7 @@ const DOMAIN_OPTIONS: Array<{ key: DomainKey; label: string }> = [
   { key: "acoustics", label: "音響（acoustics）" },
   { key: "psychoacoustics", label: "聴覚心理（psychoacoustics）" },
   { key: "audiometry", label: "聴力検査（audiometry）" },
+  { key: "screening_audiometry", label: "聴力検査スクリーニング（screening audiometry）" },
   { key: "hearing_aids", label: "補聴器（hearing_aids）" },
   { key: "evoked", label: "電気生理（evoked）" },
   { key: "vestibular", label: "前庭（vestibular）" },
