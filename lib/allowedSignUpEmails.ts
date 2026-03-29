@@ -1,14 +1,30 @@
 /**
  * 新規登録（signUp）に使えるメールかどうか。
- * - 常に @hoku-iryo-u.ac.jp を許可
- * - 浪人生など学外メールは NEXT_PUBLIC_RONIN_ALLOWED_EMAILS（カンマ区切り）で個別許可
+ * - 学内 @hoku-iryo-u.ac.jp は常に許可（クライアントでも即判定可）
+ * - 学外はサーバー API `/api/signup/check` が signup_allowlist（DB）と照合
+ * - 移行用: NEXT_PUBLIC_RONIN_ALLOWED_EMAILS（カンマ区切り）も API 側で参照
  *
- * ※ NEXT_PUBLIC_ はビルドに埋め込まれるため、許可リストはフロントの JS から参照可能です。
- *    より厳密に隠したい場合はサーバー側の Route Handler で検証する方式に切り替えてください。
+ * ※ 学外の最終判定は必ず API（service_role）で行う。クライアントのみでは改ざん可能。
  */
+
 const UNIVERSITY_SUFFIX = "@hoku-iryo-u.ac.jp";
 
-function parseAllowlist(): Set<string> {
+export function normalizeSignupEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+export function getUniversityEmailSuffix(): string {
+  return UNIVERSITY_SUFFIX;
+}
+
+/** 学内ドメインか（フームの即時バリデーション用） */
+export function isEmailUniversityDomain(email: string): boolean {
+  const e = normalizeSignupEmail(email);
+  if (!e.includes("@")) return false;
+  return e.endsWith(UNIVERSITY_SUFFIX);
+}
+
+function parseLegacyAllowlist(): Set<string> {
   const raw = process.env.NEXT_PUBLIC_RONIN_ALLOWED_EMAILS ?? "";
   const parts = raw
     .split(",")
@@ -17,15 +33,20 @@ function parseAllowlist(): Set<string> {
   return new Set(parts);
 }
 
-const roninAllowlist = parseAllowlist();
+const legacyAllowlist = parseLegacyAllowlist();
 
-export function isEmailAllowedForSignUp(email: string): boolean {
-  const e = email.trim().toLowerCase();
-  if (!e.includes("@")) return false;
-  if (e.endsWith(UNIVERSITY_SUFFIX)) return true;
-  return roninAllowlist.has(e);
+/** サーバー・移行用: 環境変数の個別許可（レガシー） */
+export function legacyRoninEmailAllowed(email: string): boolean {
+  return legacyAllowlist.has(normalizeSignupEmail(email));
 }
 
-export function getUniversityEmailSuffix(): string {
-  return UNIVERSITY_SUFFIX;
+/**
+ * @deprecated 学外の可否は `/api/signup/check` を使用。学内の即時チェックには isEmailUniversityDomain を使う。
+ * 互換のため「学内 OR レガシー env」の同期判定のみ残す。
+ */
+export function isEmailAllowedForSignUp(email: string): boolean {
+  const e = normalizeSignupEmail(email);
+  if (!e.includes("@")) return false;
+  if (e.endsWith(UNIVERSITY_SUFFIX)) return true;
+  return legacyRoninEmailAllowed(e);
 }

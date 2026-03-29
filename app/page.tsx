@@ -11,7 +11,7 @@ import {
   mapAffiliationToForm,
   normalizeGradeFromDb,
 } from "../lib/profileFieldOptions";
-import { isEmailAllowedForSignUp } from "../lib/allowedSignUpEmails";
+import { isEmailUniversityDomain } from "../lib/allowedSignUpEmails";
 import { formatSupabaseError, supabaseProfileErrorHints } from "../lib/supabasePolicyHint";
 
 type DomainKey =
@@ -271,16 +271,43 @@ export default function HomePage() {
   const signUp = async () => {
     setMsg("");
     const trimmed = email.trim();
-    if (!isEmailAllowedForSignUp(trimmed)) {
-      setMsg(
-        "新規登録は学内メール（@hoku-iryo-u.ac.jp）、または管理者が許可したメールアドレスのみ利用できます。浪人生など学外メールの方は担当教員にご相談ください。"
-      );
+    if (!trimmed) {
+      setMsg("メールアドレスを入力してください。");
       return;
     }
     if (!password) {
       setMsg("パスワードを入力してください。");
       return;
     }
+
+    let allowed = isEmailUniversityDomain(trimmed);
+    if (!allowed) {
+      try {
+        const res = await fetch("/api/signup/check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: trimmed }),
+        });
+        const j = (await res.json()) as { allowed?: boolean; hint?: string };
+        if (res.status === 503) {
+          setMsg(
+            "登録可否を確認できませんでした（サーバー設定）。管理者に SUPABASE_SERVICE_ROLE_KEY の設定を依頼してください。"
+          );
+          return;
+        }
+        allowed = j.allowed === true;
+      } catch {
+        setMsg("登録可否の確認に失敗しました。通信環境を確認してください。");
+        return;
+      }
+    }
+    if (!allowed) {
+      setMsg(
+        "新規登録は学内メール（@hoku-iryo-u.ac.jp）、または管理者が許可したメールアドレスのみ利用できます。学外メールの方は担当教員に依頼し、許可後に再度お試しください。"
+      );
+      return;
+    }
+
     const { error } = await supabase.auth.signUp({ email: trimmed, password });
     if (error) {
       setMsg("新規登録失敗: " + error.message);

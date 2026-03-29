@@ -256,6 +256,9 @@ export default function TeacherDashboardPage() {
   return (
     <main className="teacher-dashboard">
       <h1>教師ダッシュボード（領域別 正答率）</h1>
+      <p style={{ fontSize: 14, marginTop: 4 }}>
+        <Link href="/teacher/allowlist">新規登録許可メール（学外）</Link>
+      </p>
 
       {msg && <p style={{ color: "#b00", whiteSpace: "pre-wrap" }}>{msg}</p>}
 
