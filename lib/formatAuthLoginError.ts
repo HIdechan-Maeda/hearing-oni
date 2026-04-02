@@ -1,5 +1,20 @@
 import type { AuthError } from "@supabase/supabase-js";
 
+/** Supabase Auth の「メール送信レート制限」時の共通案内 */
+export const EMAIL_RATE_LIMIT_MESSAGE =
+  "確認メールの送信が短時間に多すぎます（サービスの送信上限）。30分〜1時間ほど待ってから、新規登録や「確認メール再送」を試してください。何度も連続で押さないでください。";
+
+/** メール送信レート制限（signup / resend / magic link 等） */
+export function isEmailRateLimitError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("email rate limit") ||
+    lower.includes("email_rate_limit") ||
+    (lower.includes("rate limit") && lower.includes("email")) ||
+    lower.includes("smtp rate limit")
+  );
+}
+
 /**
  * signInWithPassword 失敗時に、利用者向けの案内を付けた日本語メッセージにする。
  */
@@ -7,6 +22,9 @@ export function formatLoginErrorMessage(error: AuthError): string {
   const raw = (error.message ?? "").trim();
   const lower = raw.toLowerCase();
 
+  if (isEmailRateLimitError(raw)) {
+    return EMAIL_RATE_LIMIT_MESSAGE;
+  }
   if (lower.includes("email not confirmed")) {
     return (
       "メールアドレスの確認がまだです。新規登録時に届いたメール内のリンクを開いて本登録を完了してから、再度ログインしてください。迷惑メールフォルダも確認してください。"
@@ -38,6 +56,9 @@ export function formatSignupErrorMessage(error: AuthError): string {
   const raw = (error.message ?? "").trim();
   const lower = raw.toLowerCase();
 
+  if (isEmailRateLimitError(raw)) {
+    return EMAIL_RATE_LIMIT_MESSAGE;
+  }
   if (
     lower.includes("user already registered") ||
     lower.includes("already registered") ||
@@ -55,7 +76,7 @@ export function formatSignupErrorMessage(error: AuthError): string {
     return "パスワードが短すぎるか、要件を満たしていません。より長いパスワード（英数字を組み合わせる等）を設定してください。";
   }
   if (lower.includes("rate limit") || lower.includes("too many") || lower.includes("over_request_rate")) {
-    return "試行回数が多すぎます。しばらく待ってから再度お試しください。";
+    return "操作が短時間に多すぎます。しばらく待ってから再度お試しください。";
   }
   if (lower.includes("invalid email") || lower.includes("unable to validate email")) {
     return "メールアドレスの形式が正しくありません。入力ミスがないか確認してください。";

@@ -12,7 +12,12 @@ import {
   normalizeGradeFromDb,
 } from "../lib/profileFieldOptions";
 import { isEmailUniversityDomain, normalizeSignupEmail } from "../lib/allowedSignUpEmails";
-import { formatLoginErrorMessage, formatSignupErrorMessage } from "../lib/formatAuthLoginError";
+import {
+  EMAIL_RATE_LIMIT_MESSAGE,
+  formatLoginErrorMessage,
+  formatSignupErrorMessage,
+  isEmailRateLimitError,
+} from "../lib/formatAuthLoginError";
 import { formatSupabaseError, supabaseProfileErrorHints } from "../lib/supabasePolicyHint";
 
 type DomainKey =
@@ -296,11 +301,13 @@ export default function HomePage() {
     });
     setResendBusy(false);
     if (error) {
-      const em = (error.message ?? "").toLowerCase();
-      if (em.includes("rate") || em.includes("seconds")) {
+      const em = error.message ?? "";
+      if (isEmailRateLimitError(em)) {
+        setMsg(EMAIL_RATE_LIMIT_MESSAGE);
+      } else if (em.toLowerCase().includes("rate") || em.toLowerCase().includes("seconds")) {
         setMsg("再送は短時間に繰り返せません。しばらく待ってから再度お試しください。");
       } else {
-        setMsg("再送に失敗しました: " + error.message);
+        setMsg("再送に失敗しました: " + em);
       }
       return;
     }
