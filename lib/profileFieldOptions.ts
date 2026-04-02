@@ -8,7 +8,10 @@ export const GRADE_OPTIONS = ["1年", "2年", "3年", "4年", "既卒"] as const
  */
 export const AFFILIATION_PRESETS = ["北海道医療大学", "その他"] as const;
 
-/** DB の grade がプルダウンと違う表記のときに揃える（再取得で空に戻るのを防ぐ） */
+/**
+ * DB の grade がプルダウンと違う表記のときに揃える（再取得で空に戻るのを防ぐ）。
+ * DB 側のランキング集計は data/SUPABASE_leaderboard_cohort.sql の normalize_grade_for_cohort と整合させること。
+ */
 export function normalizeGradeFromDb(raw: string | null | undefined): string {
   const t = (raw ?? "").trim();
   if (!t) return "";

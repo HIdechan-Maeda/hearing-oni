@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
 import { RequireStudentProfile } from "../../components/RequireStudentProfile";
 import { fetchProfileRow } from "../../lib/fetchProfileRow";
+import { normalizeGradeFromDb } from "../../lib/profileFieldOptions";
 import { formatSupabaseError, supabaseLeaderboardRpcHint } from "../../lib/supabasePolicyHint";
 
 export type LeaderboardRpcRow = {
@@ -42,7 +43,7 @@ function RankingPageInner() {
         return;
       }
       const aff = (prof?.affiliation ?? "").trim();
-      const gr = (prof?.grade ?? "").trim();
+      const gr = normalizeGradeFromDb(prof?.grade ?? "");
       if (!aff || !gr) {
         setMsg("ホームで所属・学年を登録してからご利用ください。");
         setLoading(false);

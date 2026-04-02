@@ -1,6 +1,48 @@
 -- 同一「所属・学年」内のランキング（解答ログの正解数ベース）
 -- Supabase SQL Editor で実行後、学生は /ranking、教師はダッシュボードから利用可能
 -- （user_id 曖昧さ対策: 関数内先頭の #variable_conflict use_column を削除しないこと）
+--
+-- normalize_grade_for_cohort は lib/profileFieldOptions.ts の normalizeGradeFromDb と揃えること
+-- （「4年生」「４年」などを「4年」に統一し、教師が選ぶプルダウン値と一致させる）
+
+CREATE OR REPLACE FUNCTION public.normalize_grade_for_cohort(p text)
+RETURNS text
+LANGUAGE plpgsql
+IMMUTABLE
+SET search_path = public
+AS $$
+DECLARE
+  t text;
+  s text;
+BEGIN
+  t := trim(coalesce(p, ''));
+  IF t = '' THEN
+    RETURN NULL;
+  END IF;
+  s := translate(t, '１２３４', '1234');
+  IF s IN ('1年', '2年', '3年', '4年', '既卒') THEN
+    RETURN s;
+  END IF;
+  IF s ~ '^[1-4]年生$' THEN
+    RETURN substr(s, 1, 1) || '年';
+  END IF;
+  IF s IN ('1', '2', '3', '4') THEN
+    RETURN s || '年';
+  END IF;
+  IF s IN ('卒業', '卒業生', '卒業済') THEN
+    RETURN '既卒';
+  END IF;
+  IF lower(s) IN ('graduate', 'graduate student') THEN
+    RETURN '既卒';
+  END IF;
+  RETURN NULL;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.normalize_grade_for_cohort(text) FROM PUBLIC;
+
+COMMENT ON FUNCTION public.normalize_grade_for_cohort(text) IS
+  'profiles.grade の表記ゆれ（4年生・４年など）を 1年〜4年・既卒 に統一。leaderboard_cohort 内で使用。';
 
 CREATE OR REPLACE FUNCTION public.leaderboard_cohort(
   p_affiliation text DEFAULT NULL,
@@ -37,11 +79,11 @@ BEGIN
 
   IF v_is_teacher THEN
     v_aff := NULLIF(trim(COALESCE(p_affiliation, '')), '');
-    v_grade := NULLIF(trim(COALESCE(p_grade, '')), '');
+    v_grade := public.normalize_grade_for_cohort(p_grade);
   ELSE
     SELECT
       NULLIF(trim(COALESCE(pf.affiliation, '')), ''),
-      NULLIF(trim(COALESCE(pf.grade, '')), '')
+      public.normalize_grade_for_cohort(pf.grade)
     INTO v_aff, v_grade
     FROM public.profiles pf
     WHERE pf.user_id = auth.uid();
@@ -57,7 +99,7 @@ BEGIN
     FROM public.profiles p
     WHERE lower(trim(COALESCE(p.role, ''))) IS DISTINCT FROM 'teacher'
       AND NULLIF(trim(COALESCE(p.affiliation, '')), '') = v_aff
-      AND NULLIF(trim(COALESCE(p.grade, '')), '') = v_grade
+      AND public.normalize_grade_for_cohort(p.grade) IS NOT DISTINCT FROM v_grade
   ),
   agg AS (
     SELECT

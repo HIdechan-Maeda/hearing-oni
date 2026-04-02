@@ -3,25 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
-import { AFFILIATION_PRESETS, GRADE_OPTIONS } from "../../lib/profileFieldOptions";
+import { AFFILIATION_PRESETS, GRADE_OPTIONS, normalizeGradeFromDb } from "../../lib/profileFieldOptions";
 import { fetchProfilesBatch, type ProfileRowLite } from "../../lib/fetchProfilesBatch";
 import {
   formatSupabaseError,
   supabaseLeaderboardRpcHint,
   supabaseProfileErrorHints,
 } from "../../lib/supabasePolicyHint";
+import type { DomainKeyForStats } from "../../lib/domainLogClassification";
+import { logTagsMatchDomain } from "../../lib/domainLogClassification";
 
-type DomainKey =
-  | "anatomy"
-  | "physiology"
-  | "acoustics"
-  | "psychoacoustics"
-  | "audiometry"
-  | "screening_audiometry"
-  | "hearing_aids"
-  | "evoked"
-  | "vestibular"
-  | "development";
+type DomainKey = DomainKeyForStats;
 
 const DOMAIN_OPTIONS: Array<{ key: DomainKey; label: string }> = [
   { key: "anatomy", label: "解剖（anatomy）" },
@@ -33,6 +25,8 @@ const DOMAIN_OPTIONS: Array<{ key: DomainKey; label: string }> = [
   { key: "hearing_aids", label: "補聴器（hearing_aids）" },
   { key: "evoked", label: "電気生理（evoked）" },
   { key: "vestibular", label: "前庭（vestibular）" },
+  { key: "disease", label: "病気・統合問題（disease）" },
+  { key: "information_support", label: "情報保障（information support）" },
   { key: "development", label: "療育・発達（development）" },
 ];
 
@@ -116,11 +110,12 @@ export default function TeacherDashboardPage() {
         return;
       }
 
-      // logs 全体を取得（RLS で teacher のみ全件SELECT可能にしておく）
+      // 直近の解答を優先（件数上限を超えた古いログは捨てる）。未指定順だと古い行ばかりになり新規・4年などが落ちることがある。
       const { data: logs, error: logsErr } = await supabase
         .from("logs")
         .select("user_id,is_correct,tags_raw")
-        .limit(20000);
+        .order("answered_at", { ascending: false })
+        .limit(80000);
 
       if (logsErr) {
         setMsg("ログ取得エラー: " + logsErr.message);
@@ -167,12 +162,10 @@ export default function TeacherDashboardPage() {
           statsByUser[uid] = initStats;
         }
 
-        const tagsRaw = log.tags_raw ?? "";
-        const lower = tagsRaw.toLowerCase();
         const isCorrect = !!log.is_correct;
 
         for (const { key } of DOMAIN_OPTIONS) {
-          if (lower.includes(key.toLowerCase())) {
+          if (logTagsMatchDomain(log.tags_raw, key)) {
             statsByUser[uid][key].total += 1;
             if (isCorrect) statsByUser[uid][key].correct += 1;
           }
@@ -208,7 +201,7 @@ export default function TeacherDashboardPage() {
     setRankMsg("");
     const effAff =
       rankAff === "その他" ? rankAffOther.trim() : rankAff.trim();
-    const effGrade = rankGrade.trim();
+    const effGrade = normalizeGradeFromDb(rankGrade.trim());
     if (!effAff || !effGrade) {
       setRankMsg("所属・学年を選択してください。「その他」の場合は所属名も入力してください。");
       return;
@@ -288,7 +281,9 @@ export default function TeacherDashboardPage() {
                         <div style={{ color: "#1a2d42", fontSize: 12, marginTop: 4 }}>
                           {row.affiliation && <span>所属: {row.affiliation}</span>}
                           {row.affiliation && row.grade && " ／ "}
-                          {row.grade && <span>学年: {row.grade}</span>}
+                          {row.grade && (
+                            <span>学年: {normalizeGradeFromDb(row.grade) || row.grade}</span>
+                          )}
                         </div>
                       )}
                     </div>

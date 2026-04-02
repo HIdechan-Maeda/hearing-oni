@@ -3,21 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
+import type { DomainKeyForStats } from "../../lib/domainLogClassification";
+import { logTagsMatchDomain } from "../../lib/domainLogClassification";
 import { RequireStudentProfile } from "../../components/RequireStudentProfile";
 
-type DomainKey =
-  | "anatomy"
-  | "physiology"
-  | "acoustics"
-  | "psychoacoustics"
-  | "audiometry"
-  | "screening_audiometry"
-  | "hearing_aids"
-  | "evoked"
-  | "vestibular"
-  | "disease"
-  | "information_support"
-  | "development";
+type DomainKey = DomainKeyForStats;
 
 const DOMAIN_OPTIONS: Array<{ key: DomainKey; label: string }> = [
   { key: "anatomy", label: "解剖" },
@@ -33,22 +23,6 @@ const DOMAIN_OPTIONS: Array<{ key: DomainKey; label: string }> = [
   { key: "development", label: "療育・発達" },
   { key: "information_support", label: "情報保障" },
 ];
-
-// tags_raw に対して、領域ごとに見るべきキーワード一覧
-const DOMAIN_KEYWORDS: Record<DomainKey, string[]> = {
-  anatomy: ["anatomy"],
-  physiology: ["physiology"],
-  acoustics: ["acoustics"],
-  psychoacoustics: ["psychoacoustics"],
-  audiometry: ["audiometry"],
-  screening_audiometry: ["screening audiometry"],
-  hearing_aids: ["hearing_aids", "hearing_aid"],
-  evoked: ["evoked", "abr", "assr"],
-  vestibular: ["vestibular"],
-  development: ["development"],
-  information_support: ["information"],
-  disease: ["desease", "disease", "byouki", "病気", "complex", "統合"],
-};
 
 type ChartRow = {
   name: string;
@@ -102,11 +76,9 @@ function StudentDashboardPageInner() {
       }
 
       for (const row of logs ?? []) {
-        const tagsRaw = (row.tags_raw ?? "").toLowerCase();
         const isCorrect = !!row.is_correct;
         for (const { key } of DOMAIN_OPTIONS) {
-          const keywords = DOMAIN_KEYWORDS[key];
-          if (keywords.some((kw) => tagsRaw.includes(kw.toLowerCase()))) {
+          if (logTagsMatchDomain(row.tags_raw, key)) {
             stats[key].total += 1;
             if (isCorrect) stats[key].correct += 1;
           }

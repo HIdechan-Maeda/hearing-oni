@@ -8,7 +8,7 @@ ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS grade text;
 
 COMMENT ON COLUMN public.profiles.affiliation IS '所属（学科・クラス等）';
-COMMENT ON COLUMN public.profiles.grade IS '学年（例: 3年）';
+COMMENT ON COLUMN public.profiles.grade IS '学年（例: 3年、4年）。表記ゆれは leaderboard_cohort の normalize_grade_for_cohort で正規化。';
 
 -- プロフィール取得・保存で RLS エラーが出る場合は、同じく SQL Editor で
 -- data/SUPABASE_RLS_profiles.sql を実行してください。
