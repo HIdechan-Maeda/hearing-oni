@@ -62,10 +62,21 @@ type RankRow = {
   accuracy_pct: number;
 };
 
+/** PostgREST は 1 リクエストあたりの行数に上限（例: 1000）があり、.limit(80000) でも切られることがある。全件は range でページングする。 */
+const LOGS_PAGE_SIZE = 1000;
+/** 無限ループ防止（この件数まで取得） */
+const MAX_LOG_ROWS_TO_SCAN = 10_000_000;
+
 export default function TeacherDashboardPage() {
   const [rows, setRows] = useState<UserRow[]>([]);
   const [msg, setMsg] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
+  /** 集計したログ件数・人数（仕様の可視化） */
+  const [aggregateMeta, setAggregateMeta] = useState<{
+    logRows: number;
+    studentCount: number;
+    truncated: boolean;
+  } | null>(null);
 
   const [rankAff, setRankAff] = useState("");
   const [rankAffOther, setRankAffOther] = useState("");
@@ -110,26 +121,63 @@ export default function TeacherDashboardPage() {
         return;
       }
 
-      // 直近の解答を優先（件数上限を超えた古いログは捨てる）。未指定順だと古い行ばかりになり新規・4年などが落ちることがある。
-      const { data: logs, error: logsErr } = await supabase
-        .from("logs")
-        .select("user_id,is_correct,tags_raw")
-        .order("answered_at", { ascending: false })
-        .limit(80000);
+      // 全 logs をページング取得して集計（1 回だけ limit すると直近 N 件に「活発な少数ユーザー」が偏り、他の受講生が表に出ない。また API の行数上限で 1000 件などに切られることがある）
+      const statsByUser: Record<string, Record<DomainKey, DomainStat>> = {};
+      let totalLogRows = 0;
+      let offset = 0;
+      let truncated = false;
+      while (totalLogRows < MAX_LOG_ROWS_TO_SCAN) {
+        const { data: page, error: logsErr } = await supabase
+          .from("logs")
+          .select("user_id,is_correct,tags_raw")
+          .order("answered_at", { ascending: false })
+          .range(offset, offset + LOGS_PAGE_SIZE - 1);
 
-      if (logsErr) {
-        setMsg("ログ取得エラー: " + logsErr.message);
-        setLoading(false);
-        return;
+        if (logsErr) {
+          setMsg("ログ取得エラー: " + logsErr.message);
+          setAggregateMeta(null);
+          setLoading(false);
+          return;
+        }
+        if (!page?.length) break;
+
+        for (const log of page as Array<{ user_id: string; is_correct: boolean; tags_raw: string | null }>) {
+          const uid = log.user_id;
+          if (!uid) continue;
+
+          if (!statsByUser[uid]) {
+            const initStats: Record<DomainKey, DomainStat> = {} as any;
+            for (const { key } of DOMAIN_OPTIONS) {
+              initStats[key] = { total: 0, correct: 0 };
+            }
+            statsByUser[uid] = initStats;
+          }
+
+          const isCorrect = !!log.is_correct;
+          for (const { key } of DOMAIN_OPTIONS) {
+            if (logTagsMatchDomain(log.tags_raw, key)) {
+              statsByUser[uid][key].total += 1;
+              if (isCorrect) statsByUser[uid][key].correct += 1;
+            }
+          }
+        }
+        totalLogRows += page.length;
+        if (totalLogRows >= MAX_LOG_ROWS_TO_SCAN) {
+          truncated = true;
+          break;
+        }
+        if (page.length < LOGS_PAGE_SIZE) break;
+        offset += LOGS_PAGE_SIZE;
       }
 
-      if (!logs || logs.length === 0) {
+      if (totalLogRows === 0) {
         setRows([]);
+        setAggregateMeta(null);
         setLoading(false);
         return;
       }
 
-      const userIds = Array.from(new Set(logs.map((l: any) => l.user_id).filter(Boolean)));
+      const userIds = Object.keys(statsByUser);
 
       const { profiles: profileList, error: batchErr } = await fetchProfilesBatch(userIds);
       if (batchErr) {
@@ -138,6 +186,7 @@ export default function TeacherDashboardPage() {
             batchErr +
             "\n\n※ ログに出ている user が非常に多い場合は、.in() の件数制限で失敗することがあります（バッチ取得に変更済み）。affiliation / grade カラムが無い場合は name のみで取得します。"
         );
+        setAggregateMeta(null);
         setLoading(false);
         return;
       }
@@ -145,31 +194,6 @@ export default function TeacherDashboardPage() {
       const profileMap = new Map<string, ProfileRowLite>();
       for (const p of profileList) {
         profileMap.set(p.user_id, p);
-      }
-
-      // ユーザー × 領域別の統計を集計
-      const statsByUser: Record<string, Record<DomainKey, DomainStat>> = {};
-
-      for (const log of logs as Array<{ user_id: string; is_correct: boolean; tags_raw: string | null }>) {
-        const uid = log.user_id;
-        if (!uid) continue;
-
-        if (!statsByUser[uid]) {
-          const initStats: Record<DomainKey, DomainStat> = {} as any;
-          for (const { key } of DOMAIN_OPTIONS) {
-            initStats[key] = { total: 0, correct: 0 };
-          }
-          statsByUser[uid] = initStats;
-        }
-
-        const isCorrect = !!log.is_correct;
-
-        for (const { key } of DOMAIN_OPTIONS) {
-          if (logTagsMatchDomain(log.tags_raw, key)) {
-            statsByUser[uid][key].total += 1;
-            if (isCorrect) statsByUser[uid][key].correct += 1;
-          }
-        }
       }
 
       const resultRows: UserRow[] = Object.entries(statsByUser)
@@ -190,6 +214,7 @@ export default function TeacherDashboardPage() {
       // 表示を安定させるためメールでソート
       resultRows.sort((a, b) => a.email.localeCompare(b.email));
 
+      setAggregateMeta({ logRows: totalLogRows, studentCount: resultRows.length, truncated });
       setRows(resultRows);
       setLoading(false);
     };
@@ -252,10 +277,23 @@ export default function TeacherDashboardPage() {
       <p style={{ fontSize: 14, marginTop: 4 }}>
         <Link href="/teacher/allowlist">新規登録許可メール（学外）</Link>
       </p>
+      <p style={{ fontSize: 12, color: "#1a2d42", marginTop: 8, lineHeight: 1.55, maxWidth: 720 }}>
+        解答ログを<strong>全件</strong>（ページ分割）集計し、ログが 1 件以上ある受講生を一覧表示します。以前は直近のみの取得で人数が少なく見えることがありました。
+      </p>
 
       {msg && <p style={{ color: "#b00", whiteSpace: "pre-wrap" }}>{msg}</p>}
 
-      {loading && <p>読み込み中...</p>}
+      {loading && <p>読み込み中…（ログ件数が多いと 1 分近くかかることがあります）</p>}
+
+      {!loading && hasData && aggregateMeta && (
+        <p style={{ fontSize: 13, color: "#0b315b", marginTop: 8, marginBottom: 0 }}>
+          集計した解答ログ: <strong>{aggregateMeta.logRows.toLocaleString("ja-JP")}</strong> 件 ／ 表示中の受講生:{" "}
+          <strong>{aggregateMeta.studentCount}</strong> 名
+          {aggregateMeta.truncated ? (
+            <span style={{ color: "#a50" }}>（集計件数の上限に達したため、それより古いログは含まれていません）</span>
+          ) : null}
+        </p>
+      )}
 
       {!loading && hasData && (
         <div style={{ overflowX: "auto", marginTop: 12 }}>
