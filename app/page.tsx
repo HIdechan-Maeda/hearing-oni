@@ -11,8 +11,8 @@ import {
   mapAffiliationToForm,
   normalizeGradeFromDb,
 } from "../lib/profileFieldOptions";
-import { isEmailUniversityDomain } from "../lib/allowedSignUpEmails";
-import { formatLoginErrorMessage } from "../lib/formatAuthLoginError";
+import { isEmailUniversityDomain, normalizeSignupEmail } from "../lib/allowedSignUpEmails";
+import { formatLoginErrorMessage, formatSignupErrorMessage } from "../lib/formatAuthLoginError";
 import { formatSupabaseError, supabaseProfileErrorHints } from "../lib/supabasePolicyHint";
 
 type DomainKey =
@@ -269,7 +269,12 @@ export default function HomePage() {
   const signIn = async () => {
     setMsg("");
     setLoginInfoMsg("");
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const normalizedEmail = normalizeSignupEmail(email.trim());
+    if (!normalizedEmail || !normalizedEmail.includes("@")) {
+      setMsg("メールアドレスを入力してください。");
+      return;
+    }
+    const { error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
     if (error) setMsg(formatLoginErrorMessage(error));
   };
 
@@ -277,8 +282,8 @@ export default function HomePage() {
   const resendSignupConfirmation = async () => {
     setMsg("");
     setLoginInfoMsg("");
-    const trimmed = email.trim();
-    if (!trimmed) {
+    const normalizedEmail = normalizeSignupEmail(email.trim());
+    if (!normalizedEmail || !normalizedEmail.includes("@")) {
       setMsg("メールアドレスを入力してください。");
       return;
     }
@@ -286,7 +291,7 @@ export default function HomePage() {
     const origin = typeof window !== "undefined" ? window.location.origin : "";
     const { error } = await supabase.auth.resend({
       type: "signup",
-      email: trimmed,
+      email: normalizedEmail,
       options: origin ? { emailRedirectTo: `${origin}/` } : undefined,
     });
     setResendBusy(false);
@@ -308,7 +313,8 @@ export default function HomePage() {
     setMsg("");
     setLoginInfoMsg("");
     const trimmed = email.trim();
-    if (!trimmed) {
+    const normalizedEmail = normalizeSignupEmail(trimmed);
+    if (!normalizedEmail || !normalizedEmail.includes("@")) {
       setMsg("メールアドレスを入力してください。");
       return;
     }
@@ -317,18 +323,28 @@ export default function HomePage() {
       return;
     }
 
-    let allowed = isEmailUniversityDomain(trimmed);
+    let allowed = isEmailUniversityDomain(normalizedEmail);
     if (!allowed) {
       try {
         const res = await fetch("/api/signup/check", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: trimmed }),
+          body: JSON.stringify({ email: normalizedEmail }),
         });
-        const j = (await res.json()) as { allowed?: boolean; hint?: string };
+        const j = (await res.json()) as {
+          allowed?: boolean;
+          hint?: string;
+          error?: string;
+        };
         if (res.status === 503) {
           setMsg(
             "登録可否を確認できませんでした（サーバー設定）。管理者に SUPABASE_SERVICE_ROLE_KEY の設定を依頼してください。"
+          );
+          return;
+        }
+        if (j.error === "lookup_failed") {
+          setMsg(
+            "登録可否の確認中にエラーが発生しました（許可リストの参照）。しばらくしてから再度お試しください。繰り返す場合は担当教員に連絡してください。"
           );
           return;
         }
@@ -347,12 +363,12 @@ export default function HomePage() {
 
     const origin = typeof window !== "undefined" ? window.location.origin : "";
     const { error } = await supabase.auth.signUp({
-      email: trimmed,
+      email: normalizedEmail,
       password,
       options: origin ? { emailRedirectTo: `${origin}/` } : undefined,
     });
     if (error) {
-      setMsg("新規登録失敗: " + error.message);
+      setMsg(formatSignupErrorMessage(error));
     } else {
       setLoginInfoMsg("仮登録しました。届いたメール内のリンクで本登録を完了してから、ログインしてください。");
     }
@@ -429,6 +445,9 @@ export default function HomePage() {
           </div>
 
           <p style={{ marginTop: 14, fontSize: 12, color: "#243a52", lineHeight: 1.55 }}>
+            <b>新規登録できない</b>と出る場合：学外メールは、担当教員が許可するまで登録できません。学内メール（@hoku-iryo-u.ac.jp）の表記ミスがないか確認してください。「既に登録されています」は、<b>過去に同じメールで登録済み</b>です（ログインか、確認メール再送を試してください）。
+          </p>
+          <p style={{ marginTop: 10, fontSize: 12, color: "#243a52", lineHeight: 1.55 }}>
             登録済みなのにログインできない場合は、<b>仮登録メールのリンクで本登録がまだ</b>のことが多いです。届いたメールのリンクを開いてから再度お試しください。
           </p>
           <button
