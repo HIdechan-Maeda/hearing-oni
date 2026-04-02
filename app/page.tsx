@@ -12,6 +12,7 @@ import {
   normalizeGradeFromDb,
 } from "../lib/profileFieldOptions";
 import { isEmailUniversityDomain } from "../lib/allowedSignUpEmails";
+import { formatLoginErrorMessage } from "../lib/formatAuthLoginError";
 import { formatSupabaseError, supabaseProfileErrorHints } from "../lib/supabasePolicyHint";
 
 type DomainKey =
@@ -51,6 +52,9 @@ export default function HomePage() {
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [msg, setMsg] = useState<string>("");
+  /** ログイン画面の成功・案内（緑表示） */
+  const [loginInfoMsg, setLoginInfoMsg] = useState<string>("");
+  const [resendBusy, setResendBusy] = useState(false);
 
   const [domain, setDomain] = useState<DomainKey>("all");
   const [nickname, setNickname] = useState<string>("");
@@ -264,12 +268,45 @@ export default function HomePage() {
 
   const signIn = async () => {
     setMsg("");
+    setLoginInfoMsg("");
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setMsg("ログイン失敗: " + error.message);
+    if (error) setMsg(formatLoginErrorMessage(error));
+  };
+
+  /** 本登録用メールの再送（メール確認が済んでいないとログインできない場合向け） */
+  const resendSignupConfirmation = async () => {
+    setMsg("");
+    setLoginInfoMsg("");
+    const trimmed = email.trim();
+    if (!trimmed) {
+      setMsg("メールアドレスを入力してください。");
+      return;
+    }
+    setResendBusy(true);
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: trimmed,
+      options: origin ? { emailRedirectTo: `${origin}/` } : undefined,
+    });
+    setResendBusy(false);
+    if (error) {
+      const em = (error.message ?? "").toLowerCase();
+      if (em.includes("rate") || em.includes("seconds")) {
+        setMsg("再送は短時間に繰り返せません。しばらく待ってから再度お試しください。");
+      } else {
+        setMsg("再送に失敗しました: " + error.message);
+      }
+      return;
+    }
+    setLoginInfoMsg(
+      "確認メールを再送しました。受信トレイと迷惑メールを確認し、メール内のリンクで本登録を完了してからログインしてください。"
+    );
   };
 
   const signUp = async () => {
     setMsg("");
+    setLoginInfoMsg("");
     const trimmed = email.trim();
     if (!trimmed) {
       setMsg("メールアドレスを入力してください。");
@@ -308,11 +345,16 @@ export default function HomePage() {
       return;
     }
 
-    const { error } = await supabase.auth.signUp({ email: trimmed, password });
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const { error } = await supabase.auth.signUp({
+      email: trimmed,
+      password,
+      options: origin ? { emailRedirectTo: `${origin}/` } : undefined,
+    });
     if (error) {
       setMsg("新規登録失敗: " + error.message);
     } else {
-      setMsg("仮登録しました。メールに届く案内を確認してください。");
+      setLoginInfoMsg("仮登録しました。届いたメール内のリンクで本登録を完了してから、ログインしてください。");
     }
   };
 
@@ -386,6 +428,22 @@ export default function HomePage() {
             </button>
           </div>
 
+          <p style={{ marginTop: 14, fontSize: 12, color: "#243a52", lineHeight: 1.55 }}>
+            登録済みなのにログインできない場合は、<b>仮登録メールのリンクで本登録がまだ</b>のことが多いです。届いたメールのリンクを開いてから再度お試しください。
+          </p>
+          <button
+            type="button"
+            onClick={resendSignupConfirmation}
+            disabled={resendBusy}
+            className="btn-accent-outline"
+            style={{ marginTop: 10, width: "100%", fontSize: 13, opacity: resendBusy ? 0.7 : 1 }}
+          >
+            {resendBusy ? "送信中…" : "確認メールを再送する（メールアドレス欄の宛先へ）"}
+          </button>
+
+          {loginInfoMsg && (
+            <p style={{ color: "#0a6b3c", marginTop: 12, whiteSpace: "pre-wrap", fontSize: 14 }}>{loginInfoMsg}</p>
+          )}
           {msg && <p style={{ color: "#b00", marginTop: 12, whiteSpace: "pre-wrap", fontSize: 14 }}>{msg}</p>}
         </section>
       ) : !profileLoaded ? (
