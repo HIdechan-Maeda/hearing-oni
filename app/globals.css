@@ -212,6 +212,22 @@ select.input-elegant {
   grid-column: 1 / -1;
 }
 
+/* ランキング（学習メニュー先頭・目立たせる） */
+.menu-card--ranking {
+  flex-direction: column;
+  gap: 2px;
+  min-height: 64px;
+  border-color: rgba(200, 160, 80, 0.95);
+  background: linear-gradient(180deg, #fffbf0 0%, #ffecc8 100%);
+  color: #5c4008;
+  font-weight: 700;
+}
+
+.menu-card--ranking:hover {
+  border-color: #c9a050;
+  box-shadow: 0 10px 28px rgba(180, 130, 40, 0.18);
+}
+
 /* セッション画面 */
 .session-page {
   max-width: 720px;

@@ -1,21 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../lib/supabaseClient";
 import { RequireStudentProfile } from "../../components/RequireStudentProfile";
 import { fetchProfileRow } from "../../lib/fetchProfileRow";
 import { normalizeGradeFromDb } from "../../lib/profileFieldOptions";
+import { fetchLeaderboardCohort, type LeaderboardRpcRow } from "../../lib/leaderboardCohort";
 import { formatSupabaseError, supabaseLeaderboardRpcHint } from "../../lib/supabasePolicyHint";
-
-export type LeaderboardRpcRow = {
-  rank: number;
-  user_id: string;
-  display_name: string;
-  total_answered: number;
-  total_correct: number;
-  accuracy_pct: number;
-};
 
 function RankingPageInner() {
   const [me, setMe] = useState<string | null>(null);
@@ -23,6 +15,8 @@ function RankingPageInner() {
   const [rows, setRows] = useState<LeaderboardRpcRow[]>([]);
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(true);
+
+  const myRow = useMemo(() => (me ? rows.find((r) => r.user_id === me) : undefined), [me, rows]);
 
   useEffect(() => {
     const load = async () => {
@@ -51,7 +45,7 @@ function RankingPageInner() {
       }
       setCohortLabel(`${aff} ／ ${gr}`);
 
-      const { data, error } = await supabase.rpc("leaderboard_cohort", {
+      const { rows: list, error } = await fetchLeaderboardCohort(supabase, {
         p_affiliation: null,
         p_grade: null,
       });
@@ -65,25 +59,7 @@ function RankingPageInner() {
         setLoading(false);
         return;
       }
-
-      const list = (data ?? []) as Array<{
-        rank: number;
-        user_id: string;
-        display_name: string;
-        total_answered: number;
-        total_correct: number;
-        accuracy_pct: number;
-      }>;
-      setRows(
-        list.map((r) => ({
-          rank: Number(r.rank),
-          user_id: r.user_id,
-          display_name: r.display_name,
-          total_answered: Number(r.total_answered),
-          total_correct: Number(r.total_correct),
-          accuracy_pct: Number(r.accuracy_pct),
-        }))
-      );
+      setRows(list);
       setLoading(false);
     };
     load();
@@ -106,10 +82,38 @@ function RankingPageInner() {
         </p>
       )}
 
+      {!loading && !msg && rows.length > 0 && myRow && (
+        <div
+          style={{
+            marginBottom: 20,
+            padding: 18,
+            borderRadius: 14,
+            background: "linear-gradient(135deg, #e8f4ff 0%, #ffffff 100%)",
+            border: "1px solid #9ec5ea",
+          }}
+        >
+          <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "#0b315b" }}>
+            あなたの順位
+          </p>
+          <p style={{ margin: 0, fontSize: 26, fontWeight: 800, color: "#0b315b", letterSpacing: "0.02em" }}>
+            {myRow.rank} 位
+            <span style={{ fontSize: 16, fontWeight: 600, color: "#243a52", marginLeft: 10 }}>
+              （{rows.length} 名中）
+            </span>
+          </p>
+          <p style={{ margin: "10px 0 0", fontSize: 15, color: "#1a1a1a" }}>
+            正解 <strong>{myRow.total_correct}</strong> 問 ／ 解答 <strong>{myRow.total_answered}</strong> 問 ／ 正答率{" "}
+            <strong>{myRow.accuracy_pct}%</strong>
+          </p>
+        </div>
+      )}
+
       {msg && <p style={{ color: "#b00", whiteSpace: "pre-wrap" }}>{msg}</p>}
       {msg?.includes("教師アカウント") && (
         <p style={{ marginTop: 8 }}>
-          <Link href="/teacher" style={{ color: "#0b4f9c" }}>教師ダッシュボードへ</Link>
+          <Link href="/teacher" style={{ color: "#0b4f9c" }}>
+            教師ダッシュボードへ
+          </Link>
         </p>
       )}
       {loading && <p>読み込み中...</p>}
@@ -120,6 +124,7 @@ function RankingPageInner() {
 
       {!loading && rows.length > 0 && (
         <div style={{ overflowX: "auto" }}>
+          <h2 style={{ fontSize: 16, marginBottom: 10, color: "#0b315b" }}>順位表</h2>
           <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 14 }}>
             <thead>
               <tr style={{ borderBottom: "2px solid #666", background: "#f5f5f5" }}>

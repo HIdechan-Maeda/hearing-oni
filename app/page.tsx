@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import Link from "next/link";
+import { CohortRankSummary } from "../components/CohortRankSummary";
+import { HomeAnnouncement } from "../components/HomeAnnouncement";
 import { isStudentProfileComplete } from "../lib/profileComplete";
 import { fetchProfileRow } from "../lib/fetchProfileRow";
 import {
@@ -407,6 +409,7 @@ export default function HomePage() {
 
   return (
     <main className="app-shell">
+      <HomeAnnouncement />
       {!userEmail ? (
         <section className="glass-panel glass-panel--narrow">
           <div style={{ textAlign: "center", marginBottom: 22 }}>
@@ -481,6 +484,9 @@ export default function HomePage() {
           <h1 style={{ marginTop: 0, fontSize: 22 }}>プロフィール登録（必須）</h1>
           <p style={{ marginTop: 0, fontSize: 14, color: "#1a1a1a" }}>
             成績・学習状況の管理のため、以下を入力してから学習を開始してください。
+          </p>
+          <p style={{ fontSize: 13, color: "#243a52", lineHeight: 1.5 }}>
+            登録後はホームに<strong>ランキング</strong>（同じ所属・学年のグループ内順位）が表示されます。
           </p>
           <p style={{ fontSize: 13, color: "#1a1a1a" }}>ログイン中：<b>{userEmail}</b></p>
 
@@ -583,6 +589,8 @@ export default function HomePage() {
             </div>
           )}
 
+          {!isTeacher && profileLoaded && studentProfileOk && <CohortRankSummary enabled />}
+
           {!isTeacher && profileLoaded && (
             <div style={{ marginTop: 8, marginBottom: 10 }}>
               <label style={{ display: "block", color: "#1a2030", marginBottom: 6, fontWeight: 600, fontSize: 13 }}>ニックネーム</label>
@@ -674,7 +682,12 @@ export default function HomePage() {
             </div>
           </div>
 
-          <h2 style={{ margin: "0 0 12px", fontSize: 15, fontWeight: 700, color: "#0b315b" }}>学習メニュー</h2>
+          <h2 style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 700, color: "#0b315b" }}>学習メニュー</h2>
+          {!isTeacher && (
+            <p style={{ margin: "0 0 12px", fontSize: 12, color: "#243a52", lineHeight: 1.45 }}>
+              <strong>ランキング</strong>は所属・学年が同じ受講生同士の順位です（下のカードまたは先頭の「ランキング」）。
+            </p>
+          )}
           <div
             style={{
               display: "grid",
@@ -683,13 +696,20 @@ export default function HomePage() {
               marginBottom: 16,
             }}
           >
+            {!isTeacher && (
+              <Link href="/ranking" className="menu-card menu-card--ranking">
+                ランキング
+                <span style={{ display: "block", fontSize: 11, fontWeight: 500, opacity: 0.9, marginTop: 4 }}>
+                  所属・学年グループ
+                </span>
+              </Link>
+            )}
             <Link href={sessionHref} className="menu-card">基本修行</Link>
             <Link href={oniSessionHref} className="menu-card menu-card--oni">試練モード</Link>
             <Link href={recentWrongHref} className="menu-card">直近1週間の間違い</Link>
             <Link href="/review" className="menu-card">復習キュー</Link>
             <Link href="/logs" className="menu-card">日々の学習成果</Link>
             <Link href="/dashboard" className="menu-card">正答率グラフ</Link>
-            {!isTeacher && <Link href="/ranking" className="menu-card">ランキング</Link>}
             {isTeacher && (
               <Link href="/teacher" className="menu-card menu-card--wide">
                 教師ダッシュボード

@@ -276,6 +276,8 @@ export default function TeacherDashboardPage() {
       <h1>教師ダッシュボード（領域別 正答率）</h1>
       <p style={{ fontSize: 14, marginTop: 4 }}>
         <Link href="/teacher/allowlist">新規登録許可メール（学外）</Link>
+        {" · "}
+        <Link href="/teacher/announcements">お知らせ（ホーム上部）</Link>
       </p>
       <p style={{ fontSize: 12, color: "#1a2d42", marginTop: 8, lineHeight: 1.55, maxWidth: 720 }}>
         解答ログを<strong>全件</strong>（ページ分割）集計し、ログが 1 件以上ある受講生を一覧表示します。以前は直近のみの取得で人数が少なく見えることがありました。
