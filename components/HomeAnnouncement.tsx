@@ -61,12 +61,12 @@ export function HomeAnnouncement() {
       role="region"
       aria-label="お知らせ"
       style={{
-        marginBottom: 16,
-        padding: "14px 16px 14px 18px",
-        borderRadius: 14,
+        marginBottom: 0,
+        padding: "10px 12px 10px 14px",
+        borderRadius: 12,
         border: "1px solid #c5ddf5",
         background: "linear-gradient(135deg, #fffef8 0%, #f0f7ff 55%, #ffffff 100%)",
-        boxShadow: "0 4px 18px rgba(11, 79, 156, 0.1)",
+        boxShadow: "0 2px 12px rgba(11, 79, 156, 0.08)",
         position: "relative",
       }}
     >
@@ -76,33 +76,46 @@ export function HomeAnnouncement() {
         aria-label="お知らせを閉じる"
         style={{
           position: "absolute",
-          top: 8,
-          right: 10,
+          top: 6,
+          right: 8,
           border: "none",
-          background: "rgba(255,255,255,0.7)",
+          background: "rgba(255,255,255,0.85)",
           borderRadius: 8,
-          width: 32,
-          height: 32,
+          width: 30,
+          height: 30,
           cursor: "pointer",
-          fontSize: 18,
+          fontSize: 17,
           lineHeight: 1,
           color: "#243a52",
+          zIndex: 1,
         }}
       >
         ×
       </button>
-      <div style={{ paddingRight: 36 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "#0b4f9c", letterSpacing: "0.06em", marginBottom: 6 }}>
+      <div style={{ paddingRight: 34 }}>
+        <div
+          style={{
+            fontSize: 10,
+            fontWeight: 700,
+            color: "#0b4f9c",
+            letterSpacing: "0.06em",
+            marginBottom: 4,
+          }}
+        >
           お知らせ
         </div>
-        {title ? (
-          <h2 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700, color: "#0b315b" }}>{title}</h2>
-        ) : null}
-        {body ? (
-          <p style={{ margin: 0, fontSize: 14, color: "#1a2030", lineHeight: 1.65, whiteSpace: "pre-wrap" }}>{body}</p>
-        ) : null}
-        <p style={{ margin: "10px 0 0", fontSize: 11, color: "#6b7a8c" }}>
-          閉じるとこのお知らせは再表示されません（新しいお知らせが出たときは再び表示されます）。
+        <div className="home-announcement__scroll">
+          {title ? (
+            <h2 style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 700, color: "#0b315b", lineHeight: 1.35 }}>
+              {title}
+            </h2>
+          ) : null}
+          {body ? (
+            <p style={{ margin: 0, fontSize: 13, color: "#1a2030", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{body}</p>
+          ) : null}
+        </div>
+        <p style={{ margin: "8px 0 0", fontSize: 10, color: "#6b7a8c", lineHeight: 1.4 }}>
+          ×で閉じると再表示しません（新しいお知らせで再表示）。
         </p>
       </div>
     </div>
