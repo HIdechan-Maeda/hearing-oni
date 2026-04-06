@@ -21,6 +21,7 @@ const DOMAIN_OPTIONS: Array<{ key: DomainKey; label: string }> = [
   { key: "vestibular", label: "前庭" },
   { key: "disease", label: "病気・統合問題" },
   { key: "development", label: "療育・発達" },
+  { key: "pediatric_hearing_loss", label: "小児難聴" },
   { key: "information_support", label: "情報保障" },
 ];
 
