@@ -37,7 +37,7 @@ export function supabaseLeaderboardRpcHint(message: string): string {
   let s = "";
   if (/function|does not exist|PGRST202|schema cache|42883/i.test(message)) {
     s +=
-      " SQL Editor で data/SUPABASE_leaderboard_cohort.sql を実行し、必要なら Dashboard → Settings → API でスキーマを再読み込みしてください。";
+      " SQL Editor で data/SUPABASE_leaderboard_cohort.sql（および所属全体用なら data/SUPABASE_leaderboard_affiliation.sql）を実行し、必要なら Dashboard → Settings → API でスキーマを再読み込みしてください。";
   }
   if (/row-level security|permission denied|42501|relation\s+\"logs\"|table\s+logs/i.test(message)) {
     s +=

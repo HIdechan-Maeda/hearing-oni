@@ -104,7 +104,7 @@ export function CohortRankSummary({ enabled }: Props) {
         所属・学年グループ内ランキング
       </h2>
       <p style={{ margin: "0 0 8px", fontSize: 12, color: "#243a52", lineHeight: 1.5 }}>
-        あなたのプロフィールと同じ<strong>所属・学年</strong>の受講生同士で、正解数・正答率の順位を表示します。
+        あなたのプロフィールと同じ<strong>所属・学年</strong>の受講生同士で、正解数・正答率の順位を表示します。順位表では<strong>グループ全員</strong>の順位を確認でき、所属の全学年の順位にも切り替えられます。
       </p>
       {rows.length === 0 ? (
         <p style={{ margin: 0, fontSize: 14, color: "#1a2d42" }}>
