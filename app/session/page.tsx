@@ -263,6 +263,10 @@ function SessionPageInner() {
 
   const [selected, setSelected] = useState<Choice | null>(null);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
+  /** 戻る／次へで復元するため、各問の解答を保持 */
+  const [answersByQuestionId, setAnswersByQuestionId] = useState<
+    Record<string, { selected: Choice; isCorrect: boolean }>
+  >({});
 
   const [startAt, setStartAt] = useState<number>(Date.now());
   const [msg, setMsg] = useState<string>("");
@@ -353,6 +357,7 @@ function SessionPageInner() {
         setIdx(0);
         setSelected(null);
         setIsCorrect(null);
+        setAnswersByQuestionId({});
         setStartAt(Date.now());
         setStage("quiz");
         return;
@@ -457,6 +462,7 @@ function SessionPageInner() {
       setIdx(0);
       setSelected(null);
       setIsCorrect(null);
+      setAnswersByQuestionId({});
       setStartAt(Date.now());
       setStage("quiz");
     };
@@ -486,6 +492,7 @@ function SessionPageInner() {
     setSelected(choice);
     const ok = choice === q.answer;
     setIsCorrect(ok);
+    setAnswersByQuestionId((prev) => ({ ...prev, [q.id]: { selected: choice, isCorrect: ok } }));
     setStage("feedback");
 
     const timeSpent = Math.max(0, Math.round((Date.now() - startAt) / 1000));
@@ -532,16 +539,37 @@ function SessionPageInner() {
 
   const next = () => {
     setMsg("");
-    setSelected(null);
-    setIsCorrect(null);
-    setStartAt(Date.now());
-
     if (idx + 1 >= questions.length) {
       setStage("done");
+      return;
+    }
+    const nextIdx = idx + 1;
+    const nextQ = questions[nextIdx];
+    const saved = answersByQuestionId[nextQ.id];
+    setIdx(nextIdx);
+    if (saved) {
+      setSelected(saved.selected);
+      setIsCorrect(saved.isCorrect);
+      setStage("feedback");
     } else {
-      setIdx(idx + 1);
+      setSelected(null);
+      setIsCorrect(null);
+      setStartAt(Date.now());
       setStage("quiz");
     }
+  };
+
+  const goBackToPreviousFeedback = () => {
+    if (idx <= 0) return;
+    setMsg("");
+    const prevIdx = idx - 1;
+    const prevQ = questions[prevIdx];
+    const saved = answersByQuestionId[prevQ.id];
+    if (!saved) return;
+    setIdx(prevIdx);
+    setSelected(saved.selected);
+    setIsCorrect(saved.isCorrect);
+    setStage("feedback");
   };
 
   if (stage === "loading") {
@@ -640,6 +668,13 @@ function SessionPageInner() {
 
       {stage === "quiz" && (
         <>
+          {idx > 0 ? (
+            <div style={{ marginBottom: 14 }}>
+              <button type="button" onClick={goBackToPreviousFeedback} className="btn-back-prev">
+                ← 前の問題の解説を見る
+              </button>
+            </div>
+          ) : null}
           <div style={{ display: "grid", gap: 10 }}>
             {choices.map(([k, v]) => (
               <button key={k} type="button" onClick={() => submit(k)} className="choice-btn">
@@ -677,9 +712,16 @@ function SessionPageInner() {
             </p>
           )}
           {msg && <pre style={{ color: "#b00", whiteSpace: "pre-wrap" }}>{msg}</pre>}
-          <button type="button" onClick={next} className="btn-next">
-            次へ
-          </button>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+            {idx > 0 ? (
+              <button type="button" onClick={goBackToPreviousFeedback} className="btn-back-prev">
+                ← 前の問題の解説を見る
+              </button>
+            ) : null}
+            <button type="button" onClick={next} className="btn-next">
+              次へ
+            </button>
+          </div>
         </div>
       )}
 

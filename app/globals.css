@@ -390,6 +390,28 @@ select.input-elegant {
   transform: scale(0.98);
 }
 
+.btn-back-prev {
+  margin-top: 0;
+  padding: 11px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 999px;
+  border: 1px solid #8eb4dc;
+  color: #0b315b;
+  background: #f3f8ff;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-back-prev:hover {
+  background: #e6f0fb;
+  border-color: #6a9ccd;
+}
+
+.btn-back-prev:active {
+  transform: scale(0.99);
+}
+
 .btn-accent-outline {
   padding: 12px 18px;
   font-size: 16px;
