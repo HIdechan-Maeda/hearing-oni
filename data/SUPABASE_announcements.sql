@@ -1,4 +1,4 @@
--- ホーム上部のお知らせ（最新1件を表示。履歴は行として残す）
+-- ホーム上部のお知らせ（公開中・日時到達済みのうち新しい順に最大2件。履歴は行として残す）
 -- 前提: public.is_teacher() が存在すること（data/SUPABASE_RLS_profiles.sql）
 
 CREATE TABLE IF NOT EXISTS public.announcements (
@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS public.announcements (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE public.announcements IS 'アプリのお知らせ。is_active かつ published_at<=現在 のうち published_at 最新をホームに表示。';
+COMMENT ON TABLE public.announcements IS 'アプリのお知らせ。is_active かつ published_at<=現在 のうち published_at が新しい順に最大2件をホームに表示。';
 
 CREATE INDEX IF NOT EXISTS announcements_published_idx
   ON public.announcements (published_at DESC);

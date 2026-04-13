@@ -105,7 +105,7 @@ export default function TeacherAnnouncementsPage() {
     setBody("");
     setPublishedAtLocal(toDatetimeLocalValue(new Date().toISOString()));
     await load();
-    setMsg("お知らせを登録しました。ホームに最新1件が表示されます。");
+    setMsg("お知らせを登録しました。ホームに新しい順で最大2件まで表示されます。");
   };
 
   const toggleActive = async (id: string, next: boolean) => {

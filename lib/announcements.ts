@@ -18,9 +18,11 @@ export type AnnouncementPublic = {
   published_at: string;
 };
 
-/** ホーム表示用: 公開中かつ日時が来ているうち、published_at が最新の1件 */
-export async function fetchLatestAnnouncement(supabase: SupabaseClient): Promise<{
-  data: AnnouncementPublic | null;
+const HOME_ANNOUNCEMENT_LIMIT = 2;
+
+/** ホーム表示用: 公開中かつ日時が来ているうち、published_at が新しい順に最大2件 */
+export async function fetchLatestAnnouncements(supabase: SupabaseClient): Promise<{
+  data: AnnouncementPublic[];
   error: { message: string } | null;
 }> {
   const { data, error } = await supabase
@@ -29,17 +31,13 @@ export async function fetchLatestAnnouncement(supabase: SupabaseClient): Promise
     .eq("is_active", true)
     .lte("published_at", new Date().toISOString())
     .order("published_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(HOME_ANNOUNCEMENT_LIMIT);
 
   if (error) {
-    return { data: null, error };
-  }
-  if (!data) {
-    return { data: null, error: null };
+    return { data: [], error };
   }
   return {
-    data: data as AnnouncementPublic,
+    data: ((data ?? []) as AnnouncementPublic[]).filter(Boolean),
     error: null,
   };
 }
