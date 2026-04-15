@@ -95,13 +95,33 @@ main {
   box-sizing: border-box;
 }
 
-/* 長文は本文だけスクロール（カード全体が縦に伸びすぎない） */
+/* お知らせ1件: 横並び（本文スクロール列 | 閉じる）。× はスクロール領域の外に常に表示 */
+.home-announcement__itemRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.home-announcement__textCol {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* 長文はタイトル＋本文ブロックだけスクロール（× は隠れない） */
 .home-announcement__scroll {
   max-height: min(36vh, 220px);
   overflow-y: auto;
-  /* 縦スクロールバー分を確保し、×が隠れにくくする（Windows 等） */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   scrollbar-gutter: stable;
-  padding-right: 6px;
+  padding-right: 4px;
+}
+
+.home-announcement__dismiss {
+  position: relative;
+  z-index: 3;
 }
 
 .glass-panel {

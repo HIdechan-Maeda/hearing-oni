@@ -112,73 +112,74 @@ export function HomeAnnouncement() {
         >
           お知らせ
         </div>
-        <div className="home-announcement__scroll">
+        <div className="home-announcement__items">
           {visibleRows.map((row, i) => {
             const title = (row.title ?? "").trim();
             const body = (row.body ?? "").trim();
             return (
               <div
                 key={row.id}
+                className="home-announcement__item"
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "minmax(0, 1fr) auto",
-                  gap: 8,
-                  alignItems: "start",
                   marginTop: i > 0 ? 10 : 0,
                   paddingTop: i > 0 ? 12 : 0,
                   borderTop: i > 0 ? "1px solid rgba(11, 79, 156, 0.12)" : undefined,
                 }}
               >
-                <div style={{ minWidth: 0 }}>
-                  {title ? (
-                    <h2
-                      style={{
-                        margin: "0 0 6px",
-                        fontSize: 15,
-                        fontWeight: 700,
-                        color: "#0b315b",
-                        lineHeight: 1.35,
-                      }}
-                    >
-                      {title}
-                    </h2>
-                  ) : null}
-                  {body ? (
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: 13,
-                        color: "#1a2030",
-                        lineHeight: 1.55,
-                        whiteSpace: "pre-wrap",
-                      }}
-                    >
-                      {body}
-                    </p>
-                  ) : null}
+                {/* × は overflow 外に置く（Chrome 等で sticky が効かず隠れるケースを避ける） */}
+                <div className="home-announcement__itemRow">
+                  <div className="home-announcement__textCol">
+                    <div className="home-announcement__scroll">
+                      {title ? (
+                        <h2
+                          style={{
+                            margin: "0 0 6px",
+                            fontSize: 15,
+                            fontWeight: 700,
+                            color: "#0b315b",
+                            lineHeight: 1.35,
+                          }}
+                        >
+                          {title}
+                        </h2>
+                      ) : null}
+                      {body ? (
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: 13,
+                            color: "#1a2030",
+                            lineHeight: 1.55,
+                            whiteSpace: "pre-wrap",
+                          }}
+                        >
+                          {body}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => dismissOne(row.id)}
+                    aria-label="このお知らせを閉じる"
+                    className="home-announcement__dismiss"
+                    style={{
+                      border: "none",
+                      background: "rgba(255,255,255,0.96)",
+                      borderRadius: 8,
+                      width: 34,
+                      height: 34,
+                      cursor: "pointer",
+                      fontSize: 18,
+                      lineHeight: 1,
+                      color: "#243a52",
+                      flexShrink: 0,
+                      boxShadow: "0 2px 8px rgba(11, 79, 156, 0.12), 0 0 0 1px rgba(11, 79, 156, 0.1)",
+                    }}
+                  >
+                    ×
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => dismissOne(row.id)}
-                  aria-label="このお知らせを閉じる"
-                  style={{
-                    position: "sticky",
-                    top: 0,
-                    border: "none",
-                    background: "rgba(255,255,255,0.92)",
-                    borderRadius: 8,
-                    width: 30,
-                    height: 30,
-                    cursor: "pointer",
-                    fontSize: 17,
-                    lineHeight: 1,
-                    color: "#243a52",
-                    zIndex: 2,
-                    boxShadow: "0 0 0 1px rgba(11, 79, 156, 0.08)",
-                  }}
-                >
-                  ×
-                </button>
               </div>
             );
           })}
