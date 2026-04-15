@@ -17,6 +17,7 @@ const DOMAIN_OPTIONS: Array<{ key: DomainKey; label: string }> = [
   { key: "audiometry", label: "聴力検査" },
   { key: "screening_audiometry", label: "聴力検査スクリーニング" },
   { key: "hearing_aids", label: "補聴器" },
+  { key: "cochlea_implant", label: "人工内耳" },
   { key: "evoked", label: "電気生理" },
   { key: "vestibular", label: "前庭" },
   { key: "disease", label: "病気・統合問題" },

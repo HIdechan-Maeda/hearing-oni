@@ -9,6 +9,7 @@ export type DomainKeyForStats =
   | "audiometry"
   | "screening_audiometry"
   | "hearing_aids"
+  | "cochlea_implant"
   | "evoked"
   | "vestibular"
   | "disease"
@@ -25,6 +26,7 @@ export const DOMAIN_KEYWORDS: Record<DomainKeyForStats, string[]> = {
   audiometry: ["audiometry"],
   screening_audiometry: ["screening audiometry"],
   hearing_aids: ["hearing_aids", "hearing_aid"],
+  cochlea_implant: ["cochlea implant", "cochlear implant", "人工内耳"],
   evoked: ["evoked", "abr", "assr"],
   vestibular: ["vestibular"],
   development: ["development"],
