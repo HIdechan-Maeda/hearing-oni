@@ -99,7 +99,9 @@ main {
 .home-announcement__scroll {
   max-height: min(36vh, 220px);
   overflow-y: auto;
-  padding-right: 4px;
+  /* 縦スクロールバー分を確保し、×が隠れにくくする（Windows 等） */
+  scrollbar-gutter: stable;
+  padding-right: 6px;
 }
 
 .glass-panel {

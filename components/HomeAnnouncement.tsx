@@ -120,35 +120,16 @@ export function HomeAnnouncement() {
               <div
                 key={row.id}
                 style={{
-                  position: "relative",
+                  display: "grid",
+                  gridTemplateColumns: "minmax(0, 1fr) auto",
+                  gap: 8,
+                  alignItems: "start",
                   marginTop: i > 0 ? 10 : 0,
                   paddingTop: i > 0 ? 12 : 0,
                   borderTop: i > 0 ? "1px solid rgba(11, 79, 156, 0.12)" : undefined,
                 }}
               >
-                <button
-                  type="button"
-                  onClick={() => dismissOne(row.id)}
-                  aria-label="このお知らせを閉じる"
-                  style={{
-                    position: "absolute",
-                    top: i > 0 ? 10 : 0,
-                    right: 0,
-                    border: "none",
-                    background: "rgba(255,255,255,0.85)",
-                    borderRadius: 8,
-                    width: 30,
-                    height: 30,
-                    cursor: "pointer",
-                    fontSize: 17,
-                    lineHeight: 1,
-                    color: "#243a52",
-                    zIndex: 1,
-                  }}
-                >
-                  ×
-                </button>
-                <div style={{ paddingRight: 34 }}>
+                <div style={{ minWidth: 0 }}>
                   {title ? (
                     <h2
                       style={{
@@ -176,6 +157,28 @@ export function HomeAnnouncement() {
                     </p>
                   ) : null}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => dismissOne(row.id)}
+                  aria-label="このお知らせを閉じる"
+                  style={{
+                    position: "sticky",
+                    top: 0,
+                    border: "none",
+                    background: "rgba(255,255,255,0.92)",
+                    borderRadius: 8,
+                    width: 30,
+                    height: 30,
+                    cursor: "pointer",
+                    fontSize: 17,
+                    lineHeight: 1,
+                    color: "#243a52",
+                    zIndex: 2,
+                    boxShadow: "0 0 0 1px rgba(11, 79, 156, 0.08)",
+                  }}
+                >
+                  ×
+                </button>
               </div>
             );
           })}
