@@ -65,8 +65,8 @@ const DOMAIN_KEYWORDS: Record<string, string[]> = {
   vestibular: ["vestibular"],
   information_support: ["information_support", "情報保障", "information"],
   development: ["development"],
-  pediatric_hearing_exam: ["pediatric hearing", "小児聴覚検査"],
-  pediatric_hearing_loss: ["pediatric hearing loss"],
+  pediatric_hearing_exam: ["pediatric hearing", "小児聴覚検査", "pediatric_hearing_exam"],
+  pediatric_hearing_loss: ["pediatric hearing loss", "pediatric_hearing_loss"],
   deafblind: ["deafblind", "視覚聴覚二重障害", "盲ろう"],
   // 病気・統合問題
   disease: ["desease", "disease", "byouki", "病気", "complex", "統合"],
@@ -110,11 +110,52 @@ function tokenMatchesKeyword(token: string, keyword: string): boolean {
   return normalizeTagToken(token) === normalizeTagToken(keyword);
 }
 
+/**
+ * 空白区切りのキーワード（例: "pediatric hearing loss"）は、分割後のトークン列で
+ * 連続一致させる。tags_raw がスペース区切りだと単一トークン照合に引っかからないため。
+ */
+function consecutiveTokensMatchKeyword(tokens: string[], keyword: string): boolean {
+  const parts = keyword
+    .split(/\s+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length <= 1) return false;
+  if (tokens.length < parts.length) return false;
+  for (let i = 0; i <= tokens.length - parts.length; i++) {
+    let ok = true;
+    for (let j = 0; j < parts.length; j++) {
+      if (!tokenMatchesKeyword(tokens[i + j]!, parts[j]!)) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) return true;
+  }
+  return false;
+}
+
+function isPediatricHearingLossTags(tokens: string[]): boolean {
+  return (
+    consecutiveTokensMatchKeyword(tokens, "pediatric hearing loss") ||
+    tokens.some((t) => tokenMatchesKeyword(t, "pediatric_hearing_loss"))
+  );
+}
+
 function questionMatchesDomain(q: QuestionCore, domainKey: string): boolean {
   const keywords = DOMAIN_KEYWORDS[domainKey] ?? [domainKey];
   const tokens = parseTagTokens(q.tags_raw);
   if (tokens.length === 0) return false;
-  return keywords.some((kw) => tokens.some((t) => tokenMatchesKeyword(t, kw)));
+  // 「pediatric hearing」の2語一致だけだと「pediatric hearing loss」も検査側に入るため除外
+  if (domainKey === "pediatric_hearing_exam" && isPediatricHearingLossTags(tokens)) {
+    return false;
+  }
+  return keywords.some((kw) => {
+    const kwTrim = kw.trim();
+    if (/\s/.test(kwTrim)) {
+      return consecutiveTokensMatchKeyword(tokens, kwTrim);
+    }
+    return tokens.some((t) => tokenMatchesKeyword(t, kwTrim));
+  });
 }
 
 function questionSearchText(q: QuestionCore): string {
