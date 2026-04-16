@@ -888,18 +888,15 @@ function pickAvoidingLastSession(
     ? pickRandomSubset
     : (p: QuestionCore[], take: number) => pickDiverseQuestions(p, take, bucketKey);
   const preferred = pool.filter((q) => !excludeIds.has(q.id));
-  if (preferred.length >= n) {
-    return pickFn(preferred, n);
-  }
+  // 「最近出た問題」を強く避けるため、基本的には preferred だけから出題する。
+  // preferred が n 件に満たない場合は「足りない分は諦めて件数を減らす」ことで、
+  // 直前セッションとほぼ同じセットが再登場するのを防ぐ。
   if (preferred.length === 0) {
+    // すべて最近出題済みなら従来どおりプール全体から選ぶ（出題不能を避けるための最終手段）
     return pickFn(pool, n);
   }
-  const primary = pickFn(preferred, preferred.length);
-  const used = new Set(primary.map((q) => q.id));
-  const restPool = pool.filter((q) => !used.has(q.id));
-  const need = n - primary.length;
-  const secondary = pickFn(restPool, need);
-  return [...primary, ...secondary].slice(0, n);
+  const take = Math.min(n, preferred.length);
+  return pickFn(preferred, take);
 }
 
 function nextReviewAt(reason: "wrong" | "hard") {
