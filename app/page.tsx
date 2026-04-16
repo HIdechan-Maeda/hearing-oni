@@ -726,6 +726,67 @@ export default function HomePage() {
                 placeholder="例: 病理, 腫瘍"
               />
             </div>
+            {(includeKeywords.trim() || excludeKeywords.trim()) && (
+              <div
+                style={{
+                  marginTop: 12,
+                  padding: 10,
+                  borderRadius: 10,
+                  border: "1px solid #c5ddf5",
+                  background: "#f0f7ff",
+                  color: "#0b315b",
+                  fontSize: 12,
+                  lineHeight: 1.55,
+                }}
+              >
+                <div style={{ fontWeight: 700, marginBottom: 4 }}>検索条件を適用中</div>
+                {includeKeywords.trim() && <div>含める: {includeKeywords.trim()}</div>}
+                {excludeKeywords.trim() && <div>除外: {excludeKeywords.trim()}</div>}
+                <div style={{ marginTop: 4 }}>
+                  下の「基本修行」「試練モード」を押すと、この検索条件で問題が出題されます。
+                </div>
+              </div>
+            )}
+            <div
+              style={{
+                marginTop: 12,
+                padding: 10,
+                borderRadius: 10,
+                border: "1px solid #d0e3f7",
+                background: "#ffffff",
+              }}
+            >
+              <div style={{ color: "#0b315b", fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
+                キーワード検索で問題を作成
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <Link
+                  href={sessionHref}
+                  className="link-pill"
+                  style={{
+                    pointerEvents: includeKeywords.trim() || excludeKeywords.trim() ? "auto" : "none",
+                    opacity: includeKeywords.trim() || excludeKeywords.trim() ? 1 : 0.5,
+                  }}
+                >
+                  この条件で基本修行を開始
+                </Link>
+                <Link
+                  href={oniSessionHref}
+                  className="link-pill"
+                  style={{
+                    pointerEvents: includeKeywords.trim() || excludeKeywords.trim() ? "auto" : "none",
+                    opacity: includeKeywords.trim() || excludeKeywords.trim() ? 1 : 0.5,
+                  }}
+                >
+                  この条件で試練を開始
+                </Link>
+              </div>
+              {!includeKeywords.trim() && !excludeKeywords.trim() && (
+                <p style={{ margin: "8px 0 0", fontSize: 12, color: "#1a1a1a" }}>
+                  先に「含める」または「除外」にキーワードを入力してください。
+                </p>
+              )}
+            </div>
           </div>
 
           <h2 style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 700, color: "#0b315b" }}>学習メニュー</h2>
