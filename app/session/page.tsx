@@ -67,6 +67,7 @@ const DOMAIN_KEYWORDS: Record<string, string[]> = {
   development: ["development"],
   pediatric_hearing_exam: ["pediatric hearing", "小児聴覚検査"],
   pediatric_hearing_loss: ["pediatric hearing loss"],
+  deafblind: ["deafblind", "視覚聴覚二重障害", "盲ろう"],
   // 病気・統合問題
   disease: ["desease", "disease", "byouki", "病気", "complex", "統合"],
 };
@@ -84,6 +85,7 @@ const DOMAIN_BUCKET_ORDER: string[] = [
   "vestibular",
   "development",
   "pediatric_hearing_loss",
+  "deafblind",
   "disease",
   "physiology",
   "anatomy",

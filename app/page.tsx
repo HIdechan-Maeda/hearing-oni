@@ -38,7 +38,8 @@ type DomainKey =
   | "information_support"
   | "development"
   | "pediatric_hearing_exam"
-  | "pediatric_hearing_loss";
+  | "pediatric_hearing_loss"
+  | "deafblind";
 
 const DOMAIN_OPTIONS: Array<{ key: DomainKey; label: string }> = [
   { key: "all", label: "全領域（ランダム）" },
@@ -57,6 +58,7 @@ const DOMAIN_OPTIONS: Array<{ key: DomainKey; label: string }> = [
   { key: "development", label: "療育・発達（development）" },
   { key: "pediatric_hearing_exam", label: "小児聴覚検査（pediatric hearing）" },
   { key: "pediatric_hearing_loss", label: "小児難聴（pediatric hearing loss）" },
+  { key: "deafblind", label: "視覚聴覚二重障害（deafblind）" },
 ];
 
 export default function HomePage() {
