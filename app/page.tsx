@@ -77,6 +77,8 @@ export default function HomePage() {
   const [grade, setGrade] = useState<string>("");
   const [profileSaving, setProfileSaving] = useState(false);
   const [questionCount, setQuestionCount] = useState<5 | 10 | 20>(10);
+  const [includeKeywords, setIncludeKeywords] = useState<string>("");
+  const [excludeKeywords, setExcludeKeywords] = useState<string>("");
   const [isTeacher, setIsTeacher] = useState(false);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const prevUserEmailRef = useRef<string | null>(null);
@@ -91,6 +93,10 @@ export default function HomePage() {
     if (savedCount && ["5", "10", "20"].includes(savedCount)) {
       setQuestionCount(Number(savedCount) as 5 | 10 | 20);
     }
+    const savedIncludeKeywords = window.localStorage.getItem("hearing_oni_include_keywords");
+    if (savedIncludeKeywords) setIncludeKeywords(savedIncludeKeywords);
+    const savedExcludeKeywords = window.localStorage.getItem("hearing_oni_exclude_keywords");
+    if (savedExcludeKeywords) setExcludeKeywords(savedExcludeKeywords);
 
     const sp = new URLSearchParams(window.location.search);
     if (sp.get("needsProfile") === "1") {
@@ -279,6 +285,14 @@ export default function HomePage() {
     window.localStorage.setItem("hearing_oni_qcount", String(questionCount));
   }, [questionCount]);
 
+  useEffect(() => {
+    window.localStorage.setItem("hearing_oni_include_keywords", includeKeywords);
+  }, [includeKeywords]);
+
+  useEffect(() => {
+    window.localStorage.setItem("hearing_oni_exclude_keywords", excludeKeywords);
+  }, [excludeKeywords]);
+
   const signIn = async () => {
     setMsg("");
     setLoginInfoMsg("");
@@ -397,17 +411,21 @@ export default function HomePage() {
     const params = new URLSearchParams();
     if (domain !== "all") params.set("domain", domain);
     params.set("count", String(questionCount));
+    if (includeKeywords.trim()) params.set("include", includeKeywords.trim());
+    if (excludeKeywords.trim()) params.set("exclude", excludeKeywords.trim());
     const q = params.toString();
     return q ? `/session?${q}` : "/session";
-  }, [domain, questionCount]);
+  }, [domain, questionCount, includeKeywords, excludeKeywords]);
 
   const oniSessionHref = useMemo(() => {
     const params = new URLSearchParams();
     params.set("mode", "oni");
     params.set("count", String(questionCount));
     if (domain !== "all") params.set("domain", domain);
+    if (includeKeywords.trim()) params.set("include", includeKeywords.trim());
+    if (excludeKeywords.trim()) params.set("exclude", excludeKeywords.trim());
     return `/session?${params.toString()}`;
-  }, [domain, questionCount]);
+  }, [domain, questionCount, includeKeywords, excludeKeywords]);
 
   const recentWrongHref = "/session?mode=recent_wrong&count=10";
 
@@ -685,6 +703,28 @@ export default function HomePage() {
                 <option value={10}>10問</option>
                 <option value={20}>20問</option>
               </select>
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <label style={{ display: "block", color: "#0b315b", marginBottom: 6, fontSize: 13, fontWeight: 600 }}>
+                問題文・選択肢に含めるキーワード（カンマ区切り、OR）
+              </label>
+              <input
+                className="input-elegant"
+                value={includeKeywords}
+                onChange={(e) => setIncludeKeywords(e.target.value)}
+                placeholder="例: 人工内耳, ABR"
+              />
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <label style={{ display: "block", color: "#0b315b", marginBottom: 6, fontSize: 13, fontWeight: 600 }}>
+                問題文・選択肢から除外するキーワード（カンマ区切り）
+              </label>
+              <input
+                className="input-elegant"
+                value={excludeKeywords}
+                onChange={(e) => setExcludeKeywords(e.target.value)}
+                placeholder="例: 病理, 腫瘍"
+              />
             </div>
           </div>
 

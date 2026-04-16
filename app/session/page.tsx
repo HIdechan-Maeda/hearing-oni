@@ -11,13 +11,21 @@ import { RequireStudentProfile } from "../../components/RequireStudentProfile";
 type Stage = "loading" | "quiz" | "feedback" | "done";
 
 /** URL の ?domain=&mode=&count= と #anatomy / #domain=anatomy を解釈（試練で領域が効かないバグ対策：layout で先に state へ載せる） */
-function parseSessionLocation(): { domain: string; mode: string; count: 5 | 10 | 20 } {
+function parseSessionLocation(): {
+  domain: string;
+  mode: string;
+  count: 5 | 10 | 20;
+  includeKeywords: string[];
+  excludeKeywords: string[];
+} {
   if (typeof window === "undefined") {
-    return { domain: "all", mode: "", count: 10 };
+    return { domain: "all", mode: "", count: 10, includeKeywords: [], excludeKeywords: [] };
   }
   const sp = new URLSearchParams(window.location.search);
   let d = (sp.get("domain") ?? "all").trim() || "all";
   const m = (sp.get("mode") ?? "").trim();
+  const includeKeywords = splitKeywords(sp.get("include"));
+  const excludeKeywords = splitKeywords(sp.get("exclude"));
   const rawCount = Number(sp.get("count") ?? "10");
   const qc: 5 | 10 | 20 =
     rawCount === 5 || rawCount === 10 || rawCount === 20 ? (rawCount as 5 | 10 | 20) : 10;
@@ -29,7 +37,15 @@ function parseSessionLocation(): { domain: string; mode: string; count: 5 | 10 |
       d = h;
     }
   }
-  return { domain: d, mode: m, count: qc };
+  return { domain: d, mode: m, count: qc, includeKeywords, excludeKeywords };
+}
+
+function splitKeywords(raw: string | null): string[] {
+  if (!raw) return [];
+  return raw
+    .split(/[,，、;|]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 // domain ごとに tags_raw を「カンマ等で分割したトークン」と完全一致で照合する（部分一致禁止）
@@ -96,6 +112,33 @@ function questionMatchesDomain(q: QuestionCore, domainKey: string): boolean {
   const tokens = parseTagTokens(q.tags_raw);
   if (tokens.length === 0) return false;
   return keywords.some((kw) => tokens.some((t) => tokenMatchesKeyword(t, kw)));
+}
+
+function questionSearchText(q: QuestionCore): string {
+  return [
+    q.stem ?? "",
+    q.choice_a ?? "",
+    q.choice_b ?? "",
+    q.choice_c ?? "",
+    q.choice_d ?? "",
+    q.choice_e ?? "",
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function questionMatchesContentKeywords(
+  q: QuestionCore,
+  includeKeywords: string[],
+  excludeKeywords: string[]
+): boolean {
+  if (includeKeywords.length === 0 && excludeKeywords.length === 0) return true;
+  const text = questionSearchText(q);
+  const includes = includeKeywords.map((k) => k.toLowerCase());
+  const excludes = excludeKeywords.map((k) => k.toLowerCase());
+  const includeOk = includes.length === 0 || includes.some((kw) => text.includes(kw));
+  const excludeHit = excludes.some((kw) => text.includes(kw));
+  return includeOk && !excludeHit;
 }
 
 /**
@@ -260,6 +303,8 @@ function SessionPageInner() {
   const [domain, setDomain] = useState<string>("all");
   const [mode, setMode] = useState<string>("");
   const [questionCount, setQuestionCount] = useState<5 | 10 | 20>(10);
+  const [includeKeywords, setIncludeKeywords] = useState<string[]>([]);
+  const [excludeKeywords, setExcludeKeywords] = useState<string[]>([]);
 
   const [stage, setStage] = useState<Stage>("loading");
   const [questions, setQuestions] = useState<QuestionCore[]>([]);
@@ -286,10 +331,12 @@ function SessionPageInner() {
 
   // useEffect(load) より先に URL を state へ載せないと、mode が空のまま基本修行プールが走り領域フィルタも効かない
   useLayoutEffect(() => {
-    const { domain: d, mode: m, count: qc } = parseSessionLocation();
+    const { domain: d, mode: m, count: qc, includeKeywords: ik, excludeKeywords: ek } = parseSessionLocation();
     setDomain(d);
     setMode(m);
     setQuestionCount(qc);
+    setIncludeKeywords(ik);
+    setExcludeKeywords(ek);
   }, []);
 
   useEffect(() => {
@@ -419,6 +466,9 @@ function SessionPageInner() {
           filtered = filtered.filter((x) => questionMatchesDomain(x, domain));
         }
       }
+      filtered = filtered.filter((x) =>
+        questionMatchesContentKeywords(x, includeKeywords, excludeKeywords)
+      );
 
       if (filtered.length === 0) {
         if (cancelled) return;
@@ -428,8 +478,11 @@ function SessionPageInner() {
               ? "鬼問題（difficulty = 'oni'）"
               : `鬼問題かつ領域「${domain}」`
             : `領域「${domain}」`;
+        const hasKeywordFilter = includeKeywords.length > 0 || excludeKeywords.length > 0;
         setMsg(
-          mode === "oni" && domain !== "all"
+          hasKeywordFilter
+            ? `${label} かつキーワード条件に該当する問題が0件です。検索語を調整してください。`
+            : mode === "oni" && domain !== "all"
             ? `${label} に該当する問題が0件です。その領域の tags_raw と difficulty='oni' を確認してください。`
             : `${label} に該当する問題が0件です。鬼問題にしたい行の difficulty 列を 'oni' に設定してください。`
         );
@@ -476,7 +529,7 @@ function SessionPageInner() {
       cancelled = true;
     };
     // domain / mode / 出題数 が変わったら新セッション
-  }, [domain, mode, questionCount]);
+  }, [domain, mode, questionCount, includeKeywords, excludeKeywords]);
 
   const choices = useMemo(() => {
     if (!q) return [];
