@@ -499,7 +499,9 @@ function SessionPageInner() {
       const bucketKey = oniAllDomains ? questionDomainBucketKey : questionBucketKey;
       const rawPicked = pickAvoidingLastSession(filtered, questionCount, excludeIds, {
         bucketKey,
-        pickRandom: oniOneDomain,
+        // 試練（1領域）と、基本修行で少問数（5 or 10）のときは
+        // 「サブトピック分散」よりも純粋なランダム性を優先する。
+        pickRandom: oniOneDomain || (mode !== "oni" && questionCount <= 10),
       });
       let picked = oniAllDomains ? rawPicked : shuffle(rawPicked);
       // 試練は必ず difficulty=oni/鬼 のみ（万一プールに混ざった場合の最終ガード）
