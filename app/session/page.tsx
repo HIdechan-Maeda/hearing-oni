@@ -93,7 +93,8 @@ const DOMAIN_BUCKET_ORDER: string[] = [
 function parseTagTokens(tagsRaw: string | null | undefined): string[] {
   if (!tagsRaw) return [];
   return tagsRaw
-    .split(/[,;，、/|]/)
+    // CSV 上で "anatomy phisiology" のように空白区切りされているケースも拾う
+    .split(/[\s,;，、/|]+/)
     .map((t) => t.trim())
     .filter(Boolean);
 }
