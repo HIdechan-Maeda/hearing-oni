@@ -37,6 +37,7 @@ type DomainKey =
   | "disease"
   | "information_support"
   | "development"
+  | "pediatric_hearing_exam"
   | "pediatric_hearing_loss";
 
 const DOMAIN_OPTIONS: Array<{ key: DomainKey; label: string }> = [
@@ -54,6 +55,7 @@ const DOMAIN_OPTIONS: Array<{ key: DomainKey; label: string }> = [
   { key: "disease", label: "病気・統合問題（disease）" },
   { key: "information_support", label: "情報保障（information support）" },
   { key: "development", label: "療育・発達（development）" },
+  { key: "pediatric_hearing_exam", label: "小児聴覚検査（pediatric hearing）" },
   { key: "pediatric_hearing_loss", label: "小児難聴（pediatric hearing loss）" },
 ];
 
