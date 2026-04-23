@@ -4,17 +4,19 @@ export const dynamic = "force-dynamic";
 
 import { Suspense, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
-import type { Choice, QuestionCore } from "../../types";
+import type { Choice, QuestionCore, QuestionSetCount } from "../../types";
 import Link from "next/link";
 import { RequireStudentProfile } from "../../components/RequireStudentProfile";
 
 type Stage = "loading" | "quiz" | "feedback" | "done";
 
 /** URL の ?domain=&mode=&count= と #anatomy / #domain=anatomy を解釈（試練で領域が効かないバグ対策：layout で先に state へ載せる） */
+const VALID_QUESTION_SET_COUNTS = new Set<QuestionSetCount>([5, 10, 20, 30, 40, 50]);
+
 function parseSessionLocation(): {
   domain: string;
   mode: string;
-  count: 5 | 10 | 20;
+  count: QuestionSetCount;
   includeKeywords: string[];
   excludeKeywords: string[];
 } {
@@ -27,8 +29,9 @@ function parseSessionLocation(): {
   const includeKeywords = splitKeywords(sp.get("include"));
   const excludeKeywords = splitKeywords(sp.get("exclude"));
   const rawCount = Number(sp.get("count") ?? "10");
-  const qc: 5 | 10 | 20 =
-    rawCount === 5 || rawCount === 10 || rawCount === 20 ? (rawCount as 5 | 10 | 20) : 10;
+  const qc: QuestionSetCount = VALID_QUESTION_SET_COUNTS.has(rawCount as QuestionSetCount)
+    ? (rawCount as QuestionSetCount)
+    : 10;
   const h = window.location.hash.replace(/^#/, "").trim();
   if (d === "all" && h) {
     if (h.startsWith("domain=")) {
@@ -346,7 +349,7 @@ function SessionProgressBar({ current, total }: { current: number; total: number
 function SessionPageInner() {
   const [domain, setDomain] = useState<string>("all");
   const [mode, setMode] = useState<string>("");
-  const [questionCount, setQuestionCount] = useState<5 | 10 | 20>(10);
+  const [questionCount, setQuestionCount] = useState<QuestionSetCount>(10);
   const [includeKeywords, setIncludeKeywords] = useState<string[]>([]);
   const [excludeKeywords, setExcludeKeywords] = useState<string[]>([]);
 

@@ -21,6 +21,9 @@ import {
   isEmailRateLimitError,
 } from "../lib/formatAuthLoginError";
 import { formatSupabaseError, supabaseProfileErrorHints } from "../lib/supabasePolicyHint";
+import type { QuestionSetCount } from "../types";
+
+const QUESTION_SET_COUNTS: QuestionSetCount[] = [5, 10, 20, 30, 40, 50];
 
 type DomainKey =
   | "all"
@@ -78,7 +81,7 @@ export default function HomePage() {
   const [affiliationOther, setAffiliationOther] = useState<string>("");
   const [grade, setGrade] = useState<string>("");
   const [profileSaving, setProfileSaving] = useState(false);
-  const [questionCount, setQuestionCount] = useState<5 | 10 | 20>(10);
+  const [questionCount, setQuestionCount] = useState<QuestionSetCount>(10);
   const [includeKeywords, setIncludeKeywords] = useState<string>("");
   const [excludeKeywords, setExcludeKeywords] = useState<string>("");
   const [isTeacher, setIsTeacher] = useState(false);
@@ -92,8 +95,8 @@ export default function HomePage() {
     if (savedDomain) setDomain(savedDomain as DomainKey);
 
     const savedCount = window.localStorage.getItem("hearing_oni_qcount");
-    if (savedCount && ["5", "10", "20"].includes(savedCount)) {
-      setQuestionCount(Number(savedCount) as 5 | 10 | 20);
+    if (savedCount && QUESTION_SET_COUNTS.map(String).includes(savedCount)) {
+      setQuestionCount(Number(savedCount) as QuestionSetCount);
     }
     const savedIncludeKeywords = window.localStorage.getItem("hearing_oni_include_keywords");
     if (savedIncludeKeywords) setIncludeKeywords(savedIncludeKeywords);
@@ -699,11 +702,13 @@ export default function HomePage() {
               <select
                 className="input-elegant"
                 value={questionCount}
-                onChange={(e) => setQuestionCount(Number(e.target.value) as 5 | 10 | 20)}
+                onChange={(e) => setQuestionCount(Number(e.target.value) as QuestionSetCount)}
               >
-                <option value={5}>5問</option>
-                <option value={10}>10問</option>
-                <option value={20}>20問</option>
+                {QUESTION_SET_COUNTS.map((n) => (
+                  <option key={n} value={n}>
+                    {n}問
+                  </option>
+                ))}
               </select>
             </div>
             <div style={{ marginTop: 12 }}>

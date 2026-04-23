@@ -17,3 +17,6 @@ export type QuestionCore = {
 
 export type Confidence = "easy" | "ok" | "hard";
 export type Choice = "A" | "B" | "C" | "D" | "E";
+
+/** 1セットの出題数（ホーム選択・URL ?count= と一致） */
+export type QuestionSetCount = 5 | 10 | 20 | 30 | 40 | 50;
