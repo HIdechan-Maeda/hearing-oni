@@ -17,10 +17,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "聴覚・音響の鬼",
   description: "聴覚・音響の鬼 (MVP)",
-  icons: [
-    { rel: "icon", url: "/choukaku-oni-512.png" },
-    { rel: "apple-touch-icon", url: "/choukaku-oni-512.png" },
-  ],
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [{ url: "/icon-512.png", sizes: "512x512", type: "image/png" }],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
 };
 
 export const viewport = {
