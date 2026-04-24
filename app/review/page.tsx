@@ -5,6 +5,15 @@ import { supabase } from "../../lib/supabaseClient";
 import type { QuestionCore, Choice } from "../../types";
 import Link from "next/link";
 import { RequireStudentProfile } from "../../components/RequireStudentProfile";
+import {
+  buildShuffledChoiceRows,
+  formatChoicesForLog,
+  formatUserFacingCorrectAnswer,
+  formatUserPickedDisplay,
+  getRequiredAnswerCount,
+  isChosenSetCorrect,
+  togglePickedChoice,
+} from "../../lib/questionChoices";
 
 type ReviewRow = {
   question_id: string;
@@ -18,7 +27,7 @@ function ReviewPageInner() {
   const [msg, setMsg] = useState<string>("");
 
   const [active, setActive] = useState<ReviewRow | null>(null);
-  const [selected, setSelected] = useState<Choice | null>(null);
+  const [selectedChoices, setSelectedChoices] = useState<Choice[]>([]);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [startAt, setStartAt] = useState<number>(Date.now());
 
@@ -71,21 +80,32 @@ function ReviewPageInner() {
   const now = useMemo(() => new Date(), []);
   const due = items.filter((it) => new Date(it.next_review_at) <= now);
   const scheduled = items.filter((it) => new Date(it.next_review_at) > now);
+  const choiceRows = useMemo(() => {
+    if (!active?.q) return [];
+    return buildShuffledChoiceRows(active.q);
+  }, [active?.q]);
+  const reviewRequiredSelect = useMemo(
+    () => (active?.q ? getRequiredAnswerCount(active.q) : 1),
+    [active?.q]
+  );
 
   const start = (it: ReviewRow) => {
     setActive(it);
-    setSelected(null);
+    setSelectedChoices([]);
     setIsCorrect(null);
     setStartAt(Date.now());
     setMsg("");
   };
 
-  const submit = async (choice: Choice) => {
+  const submitWithChoices = async (picked: Choice[]) => {
     if (!active?.q) return;
     const q = active.q;
-    setSelected(choice);
-    const ok = choice === q.answer;
+    const need = getRequiredAnswerCount(q);
+    if (picked.length !== need) return;
+    setSelectedChoices(picked);
+    const ok = isChosenSetCorrect(q, picked);
     setIsCorrect(ok);
+    const selectedLog = formatChoicesForLog(picked);
 
     const timeSpent = Math.max(0, Math.round((Date.now() - startAt) / 1000));
     const { data: userData } = await supabase.auth.getUser();
@@ -98,7 +118,7 @@ function ReviewPageInner() {
     const { error: logErr } = await supabase.from("logs").insert({
       user_id: user.id,
       question_id: q.id,
-      selected: choice,
+      selected: selectedLog,
       is_correct: ok,
       confidence: null,
       time_spent_sec: timeSpent,
@@ -208,20 +228,58 @@ function ReviewPageInner() {
 
               {isCorrect === null ? (
                 <>
+                  {reviewRequiredSelect > 1 ? (
+                    <p style={{ margin: "10px 0", fontSize: 14, fontWeight: 600, color: "#000" }}>
+                      正解は {reviewRequiredSelect} つ選んでください（もう一度タップで選択解除）
+                    </p>
+                  ) : null}
                   <div style={{ display: "grid", gap: 10 }}>
-                    {(["A","B","C","D","E"] as Choice[]).map((k) => (
-                      <button key={k} onClick={() => submit(k)} style={btn}>
-                        {(active.q as any)[`choice_${k.toLowerCase()}`]}
-                      </button>
-                    ))}
+                    {choiceRows.map((row) => {
+                      const picked = selectedChoices.includes(row.letter);
+                      return (
+                        <button
+                          key={row.letter}
+                          type="button"
+                          onClick={() => {
+                            if (reviewRequiredSelect === 1) {
+                              void submitWithChoices([row.letter]);
+                            } else {
+                              setSelectedChoices((prev) =>
+                                togglePickedChoice(prev, row.letter, reviewRequiredSelect)
+                              );
+                            }
+                          }}
+                          style={{
+                            ...btn,
+                            ...(reviewRequiredSelect > 1 && picked
+                              ? { boxShadow: "inset 0 0 0 2px #333", background: "#f0f4f8" }
+                              : {}),
+                          }}
+                        >
+                          <span style={{ fontWeight: 700, marginRight: 8, color: "#555" }}>{row.rank}.</span>
+                          {row.text}
+                        </button>
+                      );
+                    })}
                   </div>
+                  {reviewRequiredSelect > 1 ? (
+                    <button
+                      type="button"
+                      onClick={() => void submitWithChoices(selectedChoices)}
+                      disabled={selectedChoices.length !== reviewRequiredSelect}
+                      style={{ ...btn, marginTop: 12, fontWeight: 700 }}
+                    >
+                      解答する（{selectedChoices.length}/{reviewRequiredSelect}）
+                    </button>
+                  ) : null}
 
                 </>
               ) : (
                 <>
                   <div style={{ fontSize: 18, marginTop: 10 }}>
                     {isCorrect ? "✅ 正解" : "❌ 不正解"}
-                    （あなた：{(active.q as any)[`choice_${selected?.toLowerCase()}`] ?? selected} / 正解：{(active.q as any)[`choice_${active.q.answer.toLowerCase()}`] ?? active.q.answer}）
+                    （あなた：{formatUserPickedDisplay(active.q, selectedChoices)} / 正解：
+                    {formatUserFacingCorrectAnswer(active.q)}）
                   </div>
                   {active.q.explain && <p style={{ whiteSpace: "pre-wrap" }}><b>解説：</b>{active.q.explain}</p>}
                   {msg && <pre style={{ color: "#b00", whiteSpace: "pre-wrap" }}>{msg}</pre>}

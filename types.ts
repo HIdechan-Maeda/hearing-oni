@@ -10,7 +10,11 @@ export type QuestionCore = {
   choice_c: string;
   choice_d: string;
   choice_e: string;
-  answer: "A" | "B" | "C" | "D" | "E";
+  /**
+   * 正解。単一は `C` や `(C)`、選択肢本文1件など従来どおり。
+   * 複数正解は `B,D` や `B、D` のような区切りで A〜E を列挙（順不同）。
+   */
+  answer: string;
   explain: string | null;
   tags_raw: string | null;
 };

@@ -7,6 +7,17 @@ import { supabase } from "../../lib/supabaseClient";
 import type { Choice, QuestionCore, QuestionSetCount } from "../../types";
 import Link from "next/link";
 import { RequireStudentProfile } from "../../components/RequireStudentProfile";
+import {
+  buildShuffledChoiceRows,
+  formatChoicesForLog,
+  formatUserFacingCorrectAnswer,
+  formatUserPickedDisplay,
+  getRequiredAnswerCount,
+  isChosenSetCorrect,
+  parseLoggedChoices,
+  togglePickedChoice,
+  type ShuffledChoiceRow,
+} from "../../lib/questionChoices";
 
 type Stage = "loading" | "quiz" | "feedback" | "done";
 
@@ -357,11 +368,11 @@ function SessionPageInner() {
   const [questions, setQuestions] = useState<QuestionCore[]>([]);
   const [idx, setIdx] = useState(0);
 
-  const [selected, setSelected] = useState<Choice | null>(null);
+  const [selectedChoices, setSelectedChoices] = useState<Choice[]>([]);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   /** 戻る／次へで復元するため、各問の解答を保持 */
   const [answersByQuestionId, setAnswersByQuestionId] = useState<
-    Record<string, { selected: Choice; isCorrect: boolean }>
+    Record<string, { selected: string; isCorrect: boolean }>
   >({});
 
   const [startAt, setStartAt] = useState<number>(Date.now());
@@ -453,7 +464,7 @@ function SessionPageInner() {
         saveLastSessionQuestionIds(picked.map((q) => q.id));
         setQuestions(picked);
         setIdx(0);
-        setSelected(null);
+        setSelectedChoices([]);
         setIsCorrect(null);
         setAnswersByQuestionId({});
         setStartAt(Date.now());
@@ -566,7 +577,7 @@ function SessionPageInner() {
       saveLastSessionQuestionIds(picked.map((q) => q.id));
       setQuestions(picked);
       setIdx(0);
-      setSelected(null);
+      setSelectedChoices([]);
       setIsCorrect(null);
       setAnswersByQuestionId({});
       setStartAt(Date.now());
@@ -580,25 +591,20 @@ function SessionPageInner() {
     // domain / mode / 出題数 が変わったら新セッション
   }, [domain, mode, questionCount, includeKeywords, excludeKeywords]);
 
-  const choices = useMemo(() => {
-    if (!q) return [];
-    const base: Array<[Choice, string]> = [
-      ["A", q.choice_a],
-      ["B", q.choice_b],
-      ["C", q.choice_c],
-      ["D", q.choice_d],
-      ["E", q.choice_e],
-    ];
-    // 選択肢の表示順だけ毎回シャッフルする（A〜Eラベルと正解判定は維持）
-    return shuffle(base);
+  const choiceRows = useMemo(() => {
+    if (!q) return [] as ShuffledChoiceRow[];
+    return buildShuffledChoiceRows(q);
   }, [q]);
 
-  const submit = async (choice: Choice) => {
+  const submitWithChoices = async (picked: Choice[]) => {
     if (!q) return;
-    setSelected(choice);
-    const ok = choice === q.answer;
+    const need = getRequiredAnswerCount(q);
+    if (picked.length !== need) return;
+    setSelectedChoices(picked);
+    const ok = isChosenSetCorrect(q, picked);
     setIsCorrect(ok);
-    setAnswersByQuestionId((prev) => ({ ...prev, [q.id]: { selected: choice, isCorrect: ok } }));
+    const selectedLog = formatChoicesForLog(picked);
+    setAnswersByQuestionId((prev) => ({ ...prev, [q.id]: { selected: selectedLog, isCorrect: ok } }));
     setStage("feedback");
 
     const timeSpent = Math.max(0, Math.round((Date.now() - startAt) / 1000));
@@ -615,7 +621,7 @@ function SessionPageInner() {
     const { error: logErr } = await supabase.from("logs").insert({
       user_id: user.id,
       question_id: q.id,
-      selected: choice,
+      selected: selectedLog,
       is_correct: ok,
       confidence: null,
       time_spent_sec: timeSpent,
@@ -654,11 +660,11 @@ function SessionPageInner() {
     const saved = answersByQuestionId[nextQ.id];
     setIdx(nextIdx);
     if (saved) {
-      setSelected(saved.selected);
+      setSelectedChoices(parseLoggedChoices(saved.selected));
       setIsCorrect(saved.isCorrect);
       setStage("feedback");
     } else {
-      setSelected(null);
+      setSelectedChoices([]);
       setIsCorrect(null);
       setStartAt(Date.now());
       setStage("quiz");
@@ -673,7 +679,7 @@ function SessionPageInner() {
     const saved = answersByQuestionId[prevQ.id];
     if (!saved) return;
     setIdx(prevIdx);
-    setSelected(saved.selected);
+    setSelectedChoices(parseLoggedChoices(saved.selected));
     setIsCorrect(saved.isCorrect);
     setStage("feedback");
   };
@@ -733,6 +739,7 @@ function SessionPageInner() {
   }
 
   if (!q) return null;
+  const requiredSelectCount = getRequiredAnswerCount(q);
 
   return (
     <main className="session-page">
@@ -781,13 +788,49 @@ function SessionPageInner() {
               </button>
             </div>
           ) : null}
+          {requiredSelectCount > 1 ? (
+            <p style={{ margin: "0 0 10px", fontSize: 14, color: "#0b315b", fontWeight: 600 }}>
+              正解は {requiredSelectCount} つ選んでください（もう一度タップで選択解除）
+            </p>
+          ) : null}
           <div style={{ display: "grid", gap: 10 }}>
-            {choices.map(([k, v]) => (
-              <button key={k} type="button" onClick={() => submit(k)} className="choice-btn">
-                {v}
-              </button>
-            ))}
+            {choiceRows.map((row) => {
+              const picked = selectedChoices.includes(row.letter);
+              return (
+                <button
+                  key={`${q.id}-${row.letter}`}
+                  type="button"
+                  onClick={() => {
+                    if (requiredSelectCount === 1) {
+                      void submitWithChoices([row.letter]);
+                    } else {
+                      setSelectedChoices((prev) => togglePickedChoice(prev, row.letter, requiredSelectCount));
+                    }
+                  }}
+                  className="choice-btn"
+                  style={
+                    requiredSelectCount > 1 && picked
+                      ? { boxShadow: "inset 0 0 0 2px #3d9aed", background: "rgba(61,154,237,0.12)" }
+                      : undefined
+                  }
+                >
+                  <span style={{ fontWeight: 700, marginRight: 8, color: "#6b90c7" }}>{row.rank}.</span>
+                  {row.text}
+                </button>
+              );
+            })}
           </div>
+          {requiredSelectCount > 1 ? (
+            <button
+              type="button"
+              className="btn-next"
+              style={{ marginTop: 14 }}
+              disabled={selectedChoices.length !== requiredSelectCount}
+              onClick={() => void submitWithChoices(selectedChoices)}
+            >
+              解答する（{selectedChoices.length}/{requiredSelectCount}）
+            </button>
+          ) : null}
         </>
       )}
 
@@ -799,7 +842,8 @@ function SessionPageInner() {
             </span>
           </div>
           <p style={{ fontSize: 15, color: "#1a1a1a", lineHeight: 1.65, margin: "0 0 12px" }}>
-            あなたの解答：{(q as any)[`choice_${selected?.toLowerCase()}`] ?? selected} / 正解：{(q as any)[`choice_${q.answer.toLowerCase()}`] ?? q.answer}
+            あなたの解答：{formatUserPickedDisplay(q, selectedChoices)} / 正解：
+            {formatUserFacingCorrectAnswer(q)}
           </p>
           {q.explain && (
             <p
