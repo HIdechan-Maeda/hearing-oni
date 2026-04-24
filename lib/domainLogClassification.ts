@@ -22,7 +22,7 @@ export type DomainKeyForStats =
 export const DOMAIN_KEYWORDS: Record<DomainKeyForStats, string[]> = {
   anatomy: ["anatomy"],
   physiology: ["physiology"],
-  acoustics: ["acoustics"],
+  acoustics: ["acoustics", "onkyo"],
   psychoacoustics: ["psychoacoustics"],
   audiometry: ["audiometry"],
   screening_audiometry: ["screening audiometry"],

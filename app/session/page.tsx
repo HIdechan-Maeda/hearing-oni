@@ -58,7 +58,7 @@ const DOMAIN_KEYWORDS: Record<string, string[]> = {
   // CSV では anatomy/physiology のようにスラッシュ区切りの行が多い → parseTagTokens で / も分割する
   anatomy: ["anatomy", "解剖", "解剖学", "anatomical"],
   physiology: ["physiology", "生理", "生理学", "physiological", "phisiology"],
-  acoustics: ["acoustics"],
+  acoustics: ["acoustics", "onkyo"],
   psychoacoustics: ["psychoacoustics"],
   audiometry: ["audiometry"],
   screening_audiometry: ["screening audiometry"],
