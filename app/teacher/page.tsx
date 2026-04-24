@@ -16,21 +16,8 @@ import { logTagsMatchDomain } from "../../lib/domainLogClassification";
 type DomainKey = DomainKeyForStats;
 
 const DOMAIN_OPTIONS: Array<{ key: DomainKey; label: string }> = [
-  { key: "anatomy", label: "解剖（anatomy）" },
-  { key: "physiology", label: "生理（physiology）" },
-  { key: "acoustics", label: "音響（acoustics）" },
-  { key: "psychoacoustics", label: "聴覚心理（psychoacoustics）" },
-  { key: "audiometry", label: "聴力検査（audiometry）" },
-  { key: "screening_audiometry", label: "聴力検査スクリーニング（screening audiometry）" },
-  { key: "hearing_aids", label: "補聴器（hearing_aids）" },
-  { key: "cochlea_implant", label: "人工内耳（cochlea implant）" },
-  { key: "evoked", label: "電気生理（evoked）" },
-  { key: "vestibular", label: "前庭（vestibular）" },
-  { key: "disease", label: "病気・統合問題（disease）" },
-  { key: "information_support", label: "情報保障（information support）" },
-  { key: "development", label: "療育・発達（development）" },
-  { key: "pediatric_hearing_exam", label: "小児聴覚検査（pediatric hearing）" },
-  { key: "pediatric_hearing_loss", label: "小児難聴（pediatric hearing loss）" },
+  { key: "hearing_disability", label: "聴覚障害学（音響・聴覚心理を除く）" },
+  { key: "acoustics", label: "音響学（音響・聴覚心理）" },
 ];
 
 type DomainStat = {

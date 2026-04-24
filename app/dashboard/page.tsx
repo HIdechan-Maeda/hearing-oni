@@ -10,21 +10,8 @@ import { RequireStudentProfile } from "../../components/RequireStudentProfile";
 type DomainKey = DomainKeyForStats;
 
 const DOMAIN_OPTIONS: Array<{ key: DomainKey; label: string }> = [
-  { key: "anatomy", label: "解剖" },
-  { key: "physiology", label: "生理" },
-  { key: "acoustics", label: "音響" },
-  { key: "psychoacoustics", label: "聴覚心理" },
-  { key: "audiometry", label: "聴力検査" },
-  { key: "screening_audiometry", label: "聴力検査スクリーニング" },
-  { key: "hearing_aids", label: "補聴器" },
-  { key: "cochlea_implant", label: "人工内耳" },
-  { key: "evoked", label: "電気生理" },
-  { key: "vestibular", label: "前庭" },
-  { key: "disease", label: "病気・統合問題" },
-  { key: "development", label: "療育・発達" },
-  { key: "pediatric_hearing_exam", label: "小児聴覚検査" },
-  { key: "pediatric_hearing_loss", label: "小児難聴" },
-  { key: "information_support", label: "情報保障" },
+  { key: "hearing_disability", label: "聴覚障害学" },
+  { key: "acoustics", label: "音響学" },
 ];
 
 type ChartRow = {

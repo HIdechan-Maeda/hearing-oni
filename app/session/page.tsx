@@ -20,12 +20,13 @@ import {
 } from "../../lib/questionChoices";
 
 type Stage = "loading" | "quiz" | "feedback" | "done";
+type SessionDomainKey = "all" | "hearing_disability" | "acoustics";
 
 /** URL の ?domain=&mode=&count= と #anatomy / #domain=anatomy を解釈（試練で領域が効かないバグ対策：layout で先に state へ載せる） */
 const VALID_QUESTION_SET_COUNTS = new Set<QuestionSetCount>([5, 10, 20, 30, 40, 50]);
 
 function parseSessionLocation(): {
-  domain: string;
+  domain: SessionDomainKey;
   mode: string;
   count: QuestionSetCount;
   includeKeywords: string[];
@@ -35,7 +36,7 @@ function parseSessionLocation(): {
     return { domain: "all", mode: "", count: 10, includeKeywords: [], excludeKeywords: [] };
   }
   const sp = new URLSearchParams(window.location.search);
-  let d = (sp.get("domain") ?? "all").trim() || "all";
+  let d = normalizeSessionDomain(sp.get("domain"));
   const m = (sp.get("mode") ?? "").trim();
   const includeKeywords = splitKeywords(sp.get("include"));
   const excludeKeywords = splitKeywords(sp.get("exclude"));
@@ -46,12 +47,25 @@ function parseSessionLocation(): {
   const h = window.location.hash.replace(/^#/, "").trim();
   if (d === "all" && h) {
     if (h.startsWith("domain=")) {
-      d = h.slice("domain=".length).trim() || "all";
+      d = normalizeSessionDomain(h.slice("domain=".length));
     } else if (/^[a-z_]+$/.test(h)) {
-      d = h;
+      d = normalizeSessionDomain(h);
     }
   }
   return { domain: d, mode: m, count: qc, includeKeywords, excludeKeywords };
+}
+
+function normalizeSessionDomain(raw: string | null | undefined): SessionDomainKey {
+  const v = (raw ?? "").trim().toLowerCase();
+  if (!v || v === "all") return "all";
+  if (v === "acoustics" || v === "psychoacoustics") return "acoustics";
+  return "hearing_disability";
+}
+
+function sessionDomainLabel(domain: SessionDomainKey): string {
+  if (domain === "acoustics") return "音響学";
+  if (domain === "hearing_disability") return "聴覚障害学";
+  return "全領域";
 }
 
 function splitKeywords(raw: string | null): string[] {
@@ -155,7 +169,7 @@ function isPediatricHearingLossTags(tokens: string[]): boolean {
   );
 }
 
-function questionMatchesDomain(q: QuestionCore, domainKey: string): boolean {
+function questionMatchesBaseDomain(q: QuestionCore, domainKey: string): boolean {
   const keywords = DOMAIN_KEYWORDS[domainKey] ?? [domainKey];
   const tokens = parseTagTokens(q.tags_raw);
   if (tokens.length === 0) return false;
@@ -170,6 +184,14 @@ function questionMatchesDomain(q: QuestionCore, domainKey: string): boolean {
     }
     return tokens.some((t) => tokenMatchesKeyword(t, kwTrim));
   });
+}
+
+function questionMatchesDomain(q: QuestionCore, domainKey: string): boolean {
+  const isAcousticsOrPsychoacoustics =
+    questionMatchesBaseDomain(q, "acoustics") || questionMatchesBaseDomain(q, "psychoacoustics");
+  if (domainKey === "acoustics") return isAcousticsOrPsychoacoustics;
+  if (domainKey === "hearing_disability") return !isAcousticsOrPsychoacoustics;
+  return questionMatchesBaseDomain(q, domainKey);
 }
 
 function questionSearchText(q: QuestionCore): string {
@@ -358,7 +380,7 @@ function SessionProgressBar({ current, total }: { current: number; total: number
 }
 
 function SessionPageInner() {
-  const [domain, setDomain] = useState<string>("all");
+  const [domain, setDomain] = useState<SessionDomainKey>("all");
   const [mode, setMode] = useState<string>("");
   const [questionCount, setQuestionCount] = useState<QuestionSetCount>(10);
   const [includeKeywords, setIncludeKeywords] = useState<string[]>([]);
@@ -384,7 +406,7 @@ function SessionPageInner() {
     if (mode !== "oni") return "";
     return domain === "all"
       ? "鬼問題モード（全領域ミックス）"
-      : `鬼問題モード（領域：${domain}）`;
+      : `鬼問題モード（領域：${sessionDomainLabel(domain)}）`;
   }, [mode, domain]);
 
   // useEffect(load) より先に URL を state へ載せないと、mode が空のまま基本修行プールが走り領域フィルタも効かない
@@ -534,8 +556,8 @@ function SessionPageInner() {
           mode === "oni"
             ? domain === "all"
               ? "鬼問題（difficulty = 'oni'）"
-              : `鬼問題かつ領域「${domain}」`
-            : `領域「${domain}」`;
+              : `鬼問題かつ領域「${sessionDomainLabel(domain)}」`
+            : `領域「${sessionDomainLabel(domain)}」`;
         const hasKeywordFilter = includeKeywords.length > 0 || excludeKeywords.length > 0;
         setMsg(
           hasKeywordFilter
@@ -726,7 +748,7 @@ function SessionPageInner() {
           <p style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "#0b315b" }}>おつかれさまでした</p>
           <p style={{ margin: "8px 0 0", color: "#1a1a1a" }}>
             {n}問終了（
-            {mode === "oni" ? oniLineLabel : mode === "recent_wrong" ? "直近の間違い" : `領域：${domain}`}
+            {mode === "oni" ? oniLineLabel : mode === "recent_wrong" ? "直近の間違い" : `領域：${sessionDomainLabel(domain)}`}
             ）
           </p>
         </div>
@@ -754,7 +776,7 @@ function SessionPageInner() {
           : `基本修行（${questions.length}問）`}
       </h1>
       <p style={{ margin: "0 0 12px", fontSize: 13, color: "#1a1a1a" }}>
-        {mode === "oni" ? oniLineLabel : mode === "recent_wrong" ? "直近1週間の間違い" : `領域：${domain}`}
+        {mode === "oni" ? oniLineLabel : mode === "recent_wrong" ? "直近1週間の間違い" : `領域：${sessionDomainLabel(domain)}`}
       </p>
       <SessionProgressBar current={idx + 1} total={questions.length} />
 
