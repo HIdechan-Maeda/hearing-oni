@@ -10,15 +10,80 @@ import {
   supabaseLeaderboardRpcHint,
   supabaseProfileErrorHints,
 } from "../../lib/supabasePolicyHint";
-import type { DomainKeyForStats } from "../../lib/domainLogClassification";
-import { logTagsMatchDomain } from "../../lib/domainLogClassification";
 
-type DomainKey = DomainKeyForStats;
+type DomainKey =
+  | "anatomy"
+  | "physiology"
+  | "acoustics"
+  | "psychoacoustics"
+  | "audiometry"
+  | "screening_audiometry"
+  | "hearing_aids"
+  | "cochlea_implant"
+  | "evoked"
+  | "vestibular"
+  | "disease"
+  | "information_support"
+  | "development"
+  | "pediatric_hearing_exam"
+  | "pediatric_hearing_loss";
 
 const DOMAIN_OPTIONS: Array<{ key: DomainKey; label: string }> = [
-  { key: "hearing_disability", label: "聴覚障害学（音響・聴覚心理を除く）" },
-  { key: "acoustics", label: "音響学（音響・聴覚心理）" },
+  { key: "anatomy", label: "解剖（anatomy）" },
+  { key: "physiology", label: "生理（physiology）" },
+  { key: "acoustics", label: "音響（acoustics）" },
+  { key: "psychoacoustics", label: "聴覚心理（psychoacoustics）" },
+  { key: "audiometry", label: "聴力検査（audiometry）" },
+  { key: "screening_audiometry", label: "聴力検査スクリーニング（screening audiometry）" },
+  { key: "hearing_aids", label: "補聴器（hearing_aids）" },
+  { key: "cochlea_implant", label: "人工内耳（cochlea implant）" },
+  { key: "evoked", label: "電気生理（evoked）" },
+  { key: "vestibular", label: "前庭（vestibular）" },
+  { key: "disease", label: "病気・統合問題（disease）" },
+  { key: "information_support", label: "情報保障（information support）" },
+  { key: "development", label: "療育・発達（development）" },
+  { key: "pediatric_hearing_exam", label: "小児聴覚検査（pediatric hearing）" },
+  { key: "pediatric_hearing_loss", label: "小児難聴（pediatric hearing loss）" },
 ];
+
+const DOMAIN_KEYWORDS: Record<DomainKey, string[]> = {
+  anatomy: ["anatomy"],
+  physiology: ["physiology"],
+  acoustics: ["acoustics", "onkyo"],
+  psychoacoustics: ["psychoacoustics"],
+  audiometry: ["audiometry"],
+  screening_audiometry: ["screening audiometry"],
+  hearing_aids: ["hearing_aids", "hearing_aid"],
+  cochlea_implant: ["cochlea implant", "cochlear implant", "人工内耳"],
+  evoked: ["evoked", "abr", "assr"],
+  vestibular: ["vestibular"],
+  development: ["development"],
+  information_support: ["information"],
+  disease: ["desease", "disease", "byouki", "病気", "complex", "統合"],
+  pediatric_hearing_exam: ["pediatric hearing", "小児聴覚検査"],
+  pediatric_hearing_loss: ["pediatric hearing loss"],
+};
+
+function tagsRawMatchesAnyExactToken(tagsRaw: string | null, keywords: string[]): boolean {
+  if (!tagsRaw) return false;
+  const tokens = tagsRaw
+    .split(/[,;，、/|]/)
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .map((t) => t.normalize("NFKC").trim().toLowerCase());
+  return keywords.some((kw) => {
+    const w = kw.normalize("NFKC").trim().toLowerCase();
+    return tokens.some((t) => t === w);
+  });
+}
+
+function logTagsMatchDomainDetailed(tagsRaw: string | null, key: DomainKey): boolean {
+  if (key === "pediatric_hearing_exam") {
+    return tagsRawMatchesAnyExactToken(tagsRaw, DOMAIN_KEYWORDS.pediatric_hearing_exam);
+  }
+  const lower = (tagsRaw ?? "").toLowerCase();
+  return DOMAIN_KEYWORDS[key].some((kw) => lower.includes(kw.toLowerCase()));
+}
 
 type DomainStat = {
   total: number;
@@ -145,7 +210,7 @@ export default function TeacherDashboardPage() {
 
           const isCorrect = !!log.is_correct;
           for (const { key } of DOMAIN_OPTIONS) {
-            if (logTagsMatchDomain(log.tags_raw, key)) {
+            if (logTagsMatchDomainDetailed(log.tags_raw, key)) {
               statsByUser[uid][key].total += 1;
               if (isCorrect) statsByUser[uid][key].correct += 1;
             }

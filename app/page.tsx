@@ -746,13 +746,11 @@ export default function HomePage() {
               >
                 <option value="all">全領域（ランダム）</option>
                 <optgroup label="大項目：聴覚障害学">
-                  <option value="hearing_disability">聴覚障害学（音響・聴覚心理以外）</option>
                   {DOMAIN_OPTIONS.filter((d) => HEARING_DISABILITY_SUBDOMAIN_KEYS.includes(d.key)).map((d) => (
                     <option key={d.key} value={d.key}>{d.label}</option>
                   ))}
                 </optgroup>
                 <optgroup label="大項目：音響学">
-                  <option value="acoustics_group">音響学（音響・聴覚心理）</option>
                   {DOMAIN_OPTIONS.filter((d) => ACOUSTICS_SUBDOMAIN_KEYS.includes(d.key)).map((d) => (
                     <option key={d.key} value={d.key}>{d.label}</option>
                   ))}
