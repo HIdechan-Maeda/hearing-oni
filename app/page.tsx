@@ -28,21 +28,73 @@ const QUESTION_SET_COUNTS: QuestionSetCount[] = [5, 10, 20, 30, 40, 50];
 type DomainKey =
   | "all"
   | "hearing_disability"
+  | "acoustics_group"
+  | "anatomy"
   | "physiology"
   | "acoustics"
-  | "psychoacoustics";
+  | "psychoacoustics"
+  | "audiometry"
+  | "screening_audiometry"
+  | "hearing_aids"
+  | "cochlea_implant"
+  | "evoked"
+  | "vestibular"
+  | "disease"
+  | "information_support"
+  | "development"
+  | "pediatric_hearing_exam"
+  | "pediatric_hearing_loss"
+  | "deafblind";
 
 function normalizeDomainKey(raw: string | null | undefined): DomainKey {
   const v = (raw ?? "").trim().toLowerCase();
   if (!v || v === "all") return "all";
-  if (v === "acoustics" || v === "psychoacoustics") return "acoustics";
+  if (v === "hearing_disability") return "hearing_disability";
+  if (v === "acoustics_group") return "acoustics_group";
+  if (v === "acoustics" || v === "psychoacoustics") return v as "acoustics" | "psychoacoustics";
+  if (
+    [
+      "anatomy",
+      "physiology",
+      "audiometry",
+      "screening_audiometry",
+      "hearing_aids",
+      "cochlea_implant",
+      "evoked",
+      "vestibular",
+      "disease",
+      "information_support",
+      "development",
+      "pediatric_hearing_exam",
+      "pediatric_hearing_loss",
+      "deafblind",
+    ].includes(v)
+  ) {
+    return v as DomainKey;
+  }
   return "hearing_disability";
 }
 
 const DOMAIN_OPTIONS: Array<{ key: DomainKey; label: string }> = [
   { key: "all", label: "全領域（ランダム）" },
   { key: "hearing_disability", label: "聴覚障害学（音響・聴覚心理以外）" },
-  { key: "acoustics", label: "音響学（音響・聴覚心理）" },
+  { key: "acoustics_group", label: "音響学（音響・聴覚心理）" },
+  { key: "anatomy", label: "解剖（anatomy）" },
+  { key: "physiology", label: "生理（physiology）" },
+  { key: "acoustics", label: "音響（acoustics）" },
+  { key: "psychoacoustics", label: "聴覚心理（psychoacoustics）" },
+  { key: "audiometry", label: "聴力検査（audiometry）" },
+  { key: "screening_audiometry", label: "聴力検査スクリーニング（screening audiometry）" },
+  { key: "hearing_aids", label: "補聴器（hearing_aids）" },
+  { key: "cochlea_implant", label: "人工内耳（cochlea implant）" },
+  { key: "evoked", label: "電気生理（evoked）" },
+  { key: "vestibular", label: "前庭（vestibular）" },
+  { key: "disease", label: "病気・統合問題（disease）" },
+  { key: "information_support", label: "情報保障（information support）" },
+  { key: "development", label: "療育・発達（development）" },
+  { key: "pediatric_hearing_exam", label: "小児聴覚検査（pediatric hearing）" },
+  { key: "pediatric_hearing_loss", label: "小児難聴（pediatric hearing loss）" },
+  { key: "deafblind", label: "視覚聴覚二重障害（deafblind）" },
 ];
 
 export default function HomePage() {

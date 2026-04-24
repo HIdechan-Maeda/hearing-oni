@@ -20,7 +20,26 @@ import {
 } from "../../lib/questionChoices";
 
 type Stage = "loading" | "quiz" | "feedback" | "done";
-type SessionDomainKey = "all" | "hearing_disability" | "acoustics";
+type SessionDomainKey =
+  | "all"
+  | "hearing_disability"
+  | "acoustics_group"
+  | "anatomy"
+  | "physiology"
+  | "acoustics"
+  | "psychoacoustics"
+  | "audiometry"
+  | "screening_audiometry"
+  | "hearing_aids"
+  | "cochlea_implant"
+  | "evoked"
+  | "vestibular"
+  | "disease"
+  | "information_support"
+  | "development"
+  | "pediatric_hearing_exam"
+  | "pediatric_hearing_loss"
+  | "deafblind";
 
 /** URL の ?domain=&mode=&count= と #anatomy / #domain=anatomy を解釈（試練で領域が効かないバグ対策：layout で先に state へ載せる） */
 const VALID_QUESTION_SET_COUNTS = new Set<QuestionSetCount>([5, 10, 20, 30, 40, 50]);
@@ -58,12 +77,50 @@ function parseSessionLocation(): {
 function normalizeSessionDomain(raw: string | null | undefined): SessionDomainKey {
   const v = (raw ?? "").trim().toLowerCase();
   if (!v || v === "all") return "all";
-  if (v === "acoustics" || v === "psychoacoustics") return "acoustics";
+  if (v === "hearing_disability") return "hearing_disability";
+  if (v === "acoustics_group") return "acoustics_group";
+  if (v === "acoustics" || v === "psychoacoustics") return v as "acoustics" | "psychoacoustics";
+  if (
+    [
+      "anatomy",
+      "physiology",
+      "audiometry",
+      "screening_audiometry",
+      "hearing_aids",
+      "cochlea_implant",
+      "evoked",
+      "vestibular",
+      "disease",
+      "information_support",
+      "development",
+      "pediatric_hearing_exam",
+      "pediatric_hearing_loss",
+      "deafblind",
+    ].includes(v)
+  ) {
+    return v as SessionDomainKey;
+  }
   return "hearing_disability";
 }
 
 function sessionDomainLabel(domain: SessionDomainKey): string {
-  if (domain === "acoustics") return "音響学";
+  if (domain === "acoustics_group") return "音響学";
+  if (domain === "acoustics") return "音響";
+  if (domain === "psychoacoustics") return "聴覚心理";
+  if (domain === "hearing_aids") return "補聴器";
+  if (domain === "cochlea_implant") return "人工内耳";
+  if (domain === "audiometry") return "聴力検査";
+  if (domain === "screening_audiometry") return "聴力検査スクリーニング";
+  if (domain === "evoked") return "電気生理";
+  if (domain === "vestibular") return "前庭";
+  if (domain === "disease") return "病気・統合問題";
+  if (domain === "information_support") return "情報保障";
+  if (domain === "development") return "療育・発達";
+  if (domain === "pediatric_hearing_exam") return "小児聴覚検査";
+  if (domain === "pediatric_hearing_loss") return "小児難聴";
+  if (domain === "deafblind") return "視覚聴覚二重障害";
+  if (domain === "anatomy") return "解剖";
+  if (domain === "physiology") return "生理";
   if (domain === "hearing_disability") return "聴覚障害学";
   return "全領域";
 }
@@ -189,7 +246,7 @@ function questionMatchesBaseDomain(q: QuestionCore, domainKey: string): boolean 
 function questionMatchesDomain(q: QuestionCore, domainKey: string): boolean {
   const isAcousticsOrPsychoacoustics =
     questionMatchesBaseDomain(q, "acoustics") || questionMatchesBaseDomain(q, "psychoacoustics");
-  if (domainKey === "acoustics") return isAcousticsOrPsychoacoustics;
+  if (domainKey === "acoustics_group") return isAcousticsOrPsychoacoustics;
   if (domainKey === "hearing_disability") return !isAcousticsOrPsychoacoustics;
   return questionMatchesBaseDomain(q, domainKey);
 }
