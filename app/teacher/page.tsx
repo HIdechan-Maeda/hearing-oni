@@ -117,6 +117,18 @@ type RankRow = {
   accuracy_pct: number;
 };
 
+type DailyLoginResponse = {
+  days: string[];
+  summaryByDay: Array<{ date: string; activeStudents: number }>;
+  students: Array<{
+    userId: string;
+    email: string;
+    name: string | null;
+    activeDays: number;
+    activeByDay: Record<string, boolean>;
+  }>;
+};
+
 /** PostgREST は 1 リクエストあたりの行数に上限（例: 1000）があり、.limit(80000) でも切られることがある。全件は range でページングする。 */
 const LOGS_PAGE_SIZE = 1000;
 /** 無限ループ防止（この件数まで取得） */
@@ -139,6 +151,9 @@ export default function TeacherDashboardPage() {
   const [rankRows, setRankRows] = useState<RankRow[]>([]);
   const [rankMsg, setRankMsg] = useState("");
   const [rankLoading, setRankLoading] = useState(false);
+  const [dailyLogin, setDailyLogin] = useState<DailyLoginResponse | null>(null);
+  const [dailyLoginLoading, setDailyLoginLoading] = useState(false);
+  const [dailyLoginMsg, setDailyLoginMsg] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -277,6 +292,33 @@ export default function TeacherDashboardPage() {
     load();
   }, []);
 
+  const loadDailyLogin = async () => {
+    setDailyLoginLoading(true);
+    setDailyLoginMsg("");
+    const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token ?? "";
+    if (sessionErr || !token) {
+      setDailyLoginLoading(false);
+      setDailyLoginMsg("日別ログインの取得には再ログインが必要です。");
+      return;
+    }
+    const res = await fetch("/api/teacher/login-daily?days=14", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const body = (await res.json().catch(() => ({}))) as Partial<DailyLoginResponse> & { error?: string };
+    if (!res.ok) {
+      setDailyLoginLoading(false);
+      setDailyLoginMsg(
+        body.error === "forbidden"
+          ? "教師権限が必要です。"
+          : "日別ログインの取得に失敗しました。時間をおいて再実行してください。"
+      );
+      return;
+    }
+    setDailyLogin(body as DailyLoginResponse);
+    setDailyLoginLoading(false);
+  };
+
   const loadRanking = async () => {
     setRankMsg("");
     const effAff =
@@ -403,6 +445,71 @@ export default function TeacherDashboardPage() {
       )}
 
       {!loading && !hasData && !msg && <p>まだログがありません。</p>}
+
+      <hr style={{ margin: "28px 0" }} />
+      <h2 style={{ fontSize: 18, marginBottom: 8 }}>学生の日別ログイン状況（直近14日）</h2>
+      <p style={{ fontSize: 13, color: "#1a2d42", marginTop: 0 }}>
+        解答ログ（`logs.answered_at`）をもとに、学生ごとの日別アクティブ状況を表示します。
+      </p>
+      <p style={{ marginTop: 0 }}>
+        <button type="button" onClick={loadDailyLogin} disabled={dailyLoginLoading} style={{ padding: "8px 16px", cursor: "pointer" }}>
+          {dailyLoginLoading ? "取得中..." : "日別ログインを表示"}
+        </button>
+      </p>
+      {dailyLoginMsg && <p style={{ color: "#b00", fontSize: 13 }}>{dailyLoginMsg}</p>}
+      {!dailyLoginLoading && dailyLogin && (
+        <>
+          <div style={{ overflowX: "auto", marginTop: 8 }}>
+            <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 520, fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: "#f5f5f5" }}>
+                  <th style={thStyle}>日付</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>ログイン学生数</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dailyLogin.summaryByDay.map((s) => (
+                  <tr key={s.date}>
+                    <td style={tdStyle}>{s.date}</td>
+                    <td style={{ ...tdStyle, textAlign: "right" }}>{s.activeStudents} 名</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ overflowX: "auto", marginTop: 12 }}>
+            <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 900, fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: "#f5f5f5" }}>
+                  <th style={thStyle}>学生</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>14日間のログイン日数</th>
+                  {dailyLogin.days.map((d) => (
+                    <th key={d} style={{ ...thStyle, textAlign: "center", whiteSpace: "nowrap" }}>
+                      {d.slice(5)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {dailyLogin.students.map((s) => (
+                  <tr key={s.userId}>
+                    <td style={tdStyle}>
+                      <div>{s.name ?? "(名前未設定)"}</div>
+                      <div style={{ color: "#1a2d42", fontSize: 12 }}>{s.email}</div>
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: "right" }}>{s.activeDays} 日</td>
+                    {dailyLogin.days.map((d) => (
+                      <td key={d} style={{ ...tdStyle, textAlign: "center" }}>
+                        {s.activeByDay[d] ? "◯" : "-"}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       <hr style={{ margin: "28px 0" }} />
       <h2 style={{ fontSize: 18, marginBottom: 8 }}>ランキング（所属・学年グループ別）</h2>
