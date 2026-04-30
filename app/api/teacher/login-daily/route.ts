@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import { createSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const runtime = "nodejs";
+const LOG_PAGE_SIZE = 1000;
+const MAX_LOG_SCAN = 200_000;
 
 type ProfileRow = {
   user_id: string;
@@ -94,23 +96,39 @@ export async function GET(req: Request) {
     });
   }
 
-  const { data: logs, error: logsError } = await admin
-    .from("logs")
-    .select("user_id,answered_at")
-    .in("user_id", studentIds)
-    .gte("answered_at", `${oldestDate}T00:00:00+09:00`)
-    .order("answered_at", { ascending: false });
-  if (logsError) {
-    return NextResponse.json({ error: "logs_fetch_failed" }, { status: 500 });
-  }
-
   const activeMap = new Map<string, Set<string>>();
-  for (const row of (logs ?? []) as Array<{ user_id: string; answered_at: string }>) {
-    const userId = row.user_id;
-    const dateKey = toDateKeyJst(row.answered_at);
-    if (!dateKeys.includes(dateKey)) continue;
-    if (!activeMap.has(userId)) activeMap.set(userId, new Set<string>());
-    activeMap.get(userId)!.add(dateKey);
+  const dateKeySet = new Set(dateKeys);
+  let offset = 0;
+  let scanned = 0;
+  while (scanned < MAX_LOG_SCAN) {
+    const { data: page, error: logsError } = await admin
+      .from("logs")
+      .select("user_id,answered_at")
+      .in("user_id", studentIds)
+      .order("answered_at", { ascending: false })
+      .range(offset, offset + LOG_PAGE_SIZE - 1);
+    if (logsError) {
+      return NextResponse.json({ error: "logs_fetch_failed" }, { status: 500 });
+    }
+    if (!page?.length) break;
+
+    let reachedOlderThanWindow = false;
+    for (const row of page as Array<{ user_id: string; answered_at: string }>) {
+      const userId = row.user_id;
+      const dateKey = toDateKeyJst(row.answered_at);
+      if (dateKey < oldestDate) {
+        reachedOlderThanWindow = true;
+        continue;
+      }
+      if (!dateKeySet.has(dateKey)) continue;
+      if (!activeMap.has(userId)) activeMap.set(userId, new Set<string>());
+      activeMap.get(userId)!.add(dateKey);
+    }
+
+    scanned += page.length;
+    if (reachedOlderThanWindow) break;
+    if (page.length < LOG_PAGE_SIZE) break;
+    offset += LOG_PAGE_SIZE;
   }
 
   const summaryByDay = dateKeys.map((date) => {
