@@ -10,6 +10,10 @@ import {
   supabaseLeaderboardRpcHint,
   supabaseProfileErrorHints,
 } from "../../lib/supabasePolicyHint";
+import {
+  isInvalidRefreshTokenMessage,
+  signOutLocalIfRefreshTokenInvalid,
+} from "../../lib/supabaseInvalidSession";
 
 type DomainKey =
   | "anatomy"
@@ -162,7 +166,17 @@ export default function TeacherDashboardPage() {
 
       // ログインユーザー確認
       const { data: userData, error: userErr } = await supabase.auth.getUser();
-      if (userErr || !userData.user) {
+      if (userErr) {
+        await signOutLocalIfRefreshTokenInvalid(supabase, userErr.message);
+        setMsg(
+          isInvalidRefreshTokenMessage(userErr.message)
+            ? "保存されていたログイン情報が無効です。一度ログアウト済みです。ホームから再度ログインしてください。"
+            : "ログインしてください。"
+        );
+        setLoading(false);
+        return;
+      }
+      if (!userData.user) {
         setMsg("ログインしてください。");
         setLoading(false);
         return;
@@ -296,8 +310,18 @@ export default function TeacherDashboardPage() {
     setDailyLoginLoading(true);
     setDailyLoginMsg("");
     const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
+    if (sessionErr) {
+      await signOutLocalIfRefreshTokenInvalid(supabase, sessionErr.message);
+      setDailyLoginLoading(false);
+      setDailyLoginMsg(
+        isInvalidRefreshTokenMessage(sessionErr.message)
+          ? "セッションの更新に失敗しました。保存されていたログインを消しました。ホームから再度ログインしてください。"
+          : "日別ログインの取得には再ログインが必要です。"
+      );
+      return;
+    }
     const token = sessionData.session?.access_token ?? "";
-    if (sessionErr || !token) {
+    if (!token) {
       setDailyLoginLoading(false);
       setDailyLoginMsg("日別ログインの取得には再ログインが必要です。");
       return;
@@ -375,6 +399,8 @@ export default function TeacherDashboardPage() {
         <Link href="/teacher/allowlist">新規登録許可メール（学外）</Link>
         {" · "}
         <Link href="/teacher/announcements">お知らせ（ホーム上部）</Link>
+        {" · "}
+        <Link href="/teacher/questions-generate">OpenAI 問題生成</Link>
       </p>
       <p style={{ fontSize: 12, color: "#1a2d42", marginTop: 8, lineHeight: 1.55, maxWidth: 720 }}>
         解答ログを<strong>全件</strong>（ページ分割）集計し、ログが 1 件以上ある受講生を一覧表示します。以前は直近のみの取得で人数が少なく見えることがありました。

@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { signOutLocalIfRefreshTokenInvalid } from "./supabaseInvalidSession";
 
 const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim();
 const supabaseAnonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "").trim();
@@ -15,3 +16,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+/** 古い / 無効な refresh が localStorage に残っていると Console に AuthApiError が出続けるため、起動時に掃除する */
+if (typeof window !== "undefined") {
+  void supabase.auth.getSession().then(async ({ error }) => {
+    if (error?.message) await signOutLocalIfRefreshTokenInvalid(supabase, error.message);
+  });
+}
