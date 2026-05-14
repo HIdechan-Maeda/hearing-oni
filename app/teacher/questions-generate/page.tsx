@@ -48,8 +48,11 @@ export default function TeacherQuestionsGeneratePage() {
   const [busy, setBusy] = useState(false);
 
   const [domainKey, setDomainKey] = useState<QuestionGenerateDomainKey | "">("");
+  const [tagsRawContains, setTagsRawContains] = useState("");
+  const [tagsRawOutputHint, setTagsRawOutputHint] = useState("");
   const [count, setCount] = useState(2);
   const [exampleCount, setExampleCount] = useState(4);
+  const [fetchPool, setFetchPool] = useState(1200);
   const [persist, setPersist] = useState(false);
 
   const [lastResponse, setLastResponse] = useState<GenerateResponse | null>(null);
@@ -104,9 +107,12 @@ export default function TeacherQuestionsGeneratePage() {
     const body: Record<string, unknown> = {
       count,
       exampleCount,
+      fetchPool,
       persist,
     };
     if (domainKey) body.domainKey = domainKey;
+    if (tagsRawContains.trim()) body.tagsRawContains = tagsRawContains.trim();
+    if (tagsRawOutputHint.trim()) body.tagsRawOutputHint = tagsRawOutputHint.trim();
 
     const res = await fetch("/api/teacher/questions/generate", {
       method: "POST",
@@ -149,6 +155,7 @@ export default function TeacherQuestionsGeneratePage() {
         サーバーが <code>questions_core</code> から参考例を読み、OpenAI に同型の<strong>新規</strong>
         問題を JSON で生成させます。Vercel 等の環境変数に <code>OPENAI_API_KEY</code> が必要です。任意で{" "}
         <code>OPENAI_QUESTION_MODEL</code>（既定: gpt-4o-mini）。医学的事実は必ず人間が確認してください。
+        参考例は DB から最大「参照プール」行を読み、その中からランダムに「参考例の件数」だけ OpenAI に渡します。
       </p>
 
       {loading && <p>読み込み中…</p>}
@@ -162,7 +169,7 @@ export default function TeacherQuestionsGeneratePage() {
             </p>
           )}
 
-          <section style={{ marginTop: 16, maxWidth: 560 }}>
+          <section style={{ marginTop: 16, maxWidth: 640 }}>
             <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>領域（参考例の絞り込み）</label>
             <select
               value={domainKey}
@@ -175,6 +182,35 @@ export default function TeacherQuestionsGeneratePage() {
                 </option>
               ))}
             </select>
+          </section>
+
+          <section style={{ marginTop: 16, maxWidth: 640 }}>
+            <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>
+              tags_raw に含む文字列（任意・参考例の絞り込み）
+            </label>
+            <input
+              type="text"
+              value={tagsRawContains}
+              onChange={(e) => setTagsRawContains(e.target.value)}
+              placeholder="例: audiometry / screening / 補聴器 など（部分一致）"
+              style={{ width: "100%", padding: 8, fontSize: 14, boxSizing: "border-box" }}
+            />
+            <p style={{ fontSize: 12, color: "#555", margin: "6px 0 0" }}>
+              領域を選んだ場合と<strong>両方</strong>入れると、両方を満たす行だけが参考例になります。
+            </p>
+          </section>
+
+          <section style={{ marginTop: 16, maxWidth: 640 }}>
+            <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>
+              新規問題の tags_raw の目安（任意）
+            </label>
+            <input
+              type="text"
+              value={tagsRawOutputHint}
+              onChange={(e) => setTagsRawOutputHint(e.target.value)}
+              placeholder="空なら上の「含む文字列」を目安に使います。別表記にしたいときだけ入力"
+              style={{ width: "100%", padding: 8, fontSize: 14, boxSizing: "border-box" }}
+            />
           </section>
 
           <section style={{ marginTop: 16, display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
@@ -194,9 +230,22 @@ export default function TeacherQuestionsGeneratePage() {
               <input
                 type="number"
                 min={1}
-                max={10}
+                max={20}
                 value={exampleCount}
                 onChange={(e) => setExampleCount(Number(e.target.value))}
+                style={{ width: 96, padding: 8 }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", marginBottom: 4, fontWeight: 600 }} title="questions_core から読む最大行数（その中からシャッフルして参考例を選ぶ）">
+                参照プール（行）
+              </label>
+              <input
+                type="number"
+                min={50}
+                max={2000}
+                value={fetchPool}
+                onChange={(e) => setFetchPool(Number(e.target.value))}
                 style={{ width: 96, padding: 8 }}
               />
             </div>

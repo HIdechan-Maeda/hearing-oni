@@ -49,6 +49,20 @@ export type GeneratedQuestionDraft = Pick<
   "stem" | "choice_a" | "choice_b" | "choice_c" | "choice_d" | "choice_e" | "answer" | "explain" | "tags_raw"
 >;
 
+const MAX_TAGS_RAW_HINT_LEN = 200;
+
+/**
+ * tags_raw の ILIKE 用。% _ \ を除き、長さを制限する（ワイルドカード注入を防ぐ）。
+ */
+export function sanitizeTagsRawHintInput(raw: string | null | undefined): string | null {
+  if (raw == null) return null;
+  const s = String(raw).normalize("NFKC").trim().slice(0, MAX_TAGS_RAW_HINT_LEN);
+  if (!s) return null;
+  const noWild = s.replace(/[%_\\]/g, " ");
+  const collapsed = noWild.replace(/\s+/g, " ").trim();
+  return collapsed.length ? collapsed : null;
+}
+
 function fisherYates<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i -= 1) {
@@ -64,19 +78,28 @@ function isNonEmpty(s: unknown): s is string {
 
 export async function loadExampleQuestionsForGeneration(
   admin: SupabaseClient,
-  opts: { domainKey: QuestionGenerateDomainKey | null; sampleSize: number; fetchPool: number }
+  opts: {
+    domainKey: QuestionGenerateDomainKey | null;
+    /** 参考例の tags_raw に含まれる部分文字列（ILIKE）。領域指定と併用すると両方を満たす行のみ。 */
+    tagsRawContains: string | null;
+    sampleSize: number;
+    fetchPool: number;
+  }
 ): Promise<ExampleQuestionRow[]> {
-  const pool = Math.min(Math.max(opts.fetchPool, 20), 500);
-  const sampleSize = Math.min(Math.max(opts.sampleSize, 1), 12);
+  const pool = Math.min(Math.max(opts.fetchPool, 20), 2000);
+  const sampleSize = Math.min(Math.max(opts.sampleSize, 1), 24);
 
   let q = admin
     .from("questions_core")
     .select("id,stem,choice_a,choice_b,choice_c,choice_d,choice_e,answer,explain,tags_raw")
     .limit(pool);
 
-  const hint = opts.domainKey ? DOMAIN_TAG_FILTER[opts.domainKey] : null;
-  if (hint) {
-    q = q.ilike("tags_raw", `%${hint}%`);
+  const domainHint = opts.domainKey ? DOMAIN_TAG_FILTER[opts.domainKey] : null;
+  if (domainHint) {
+    q = q.ilike("tags_raw", `%${domainHint}%`);
+  }
+  if (opts.tagsRawContains) {
+    q = q.ilike("tags_raw", `%${opts.tagsRawContains}%`);
   }
 
   const { data, error } = await q;
@@ -143,6 +166,8 @@ function buildSystemPrompt(): string {
 export async function generateQuestionsWithOpenAI(params: {
   examples: ExampleQuestionRow[];
   domainKey: QuestionGenerateDomainKey | null;
+  /** 新規問題の tags_raw に寄せてほしい表記（空ならモデル任せ） */
+  tagsRawOutputHint: string | null;
   count: number;
 }): Promise<GeneratedQuestionDraft[]> {
   const apiKey = (process.env.OPENAI_API_KEY ?? "").trim();
@@ -157,8 +182,15 @@ export async function generateQuestionsWithOpenAI(params: {
     ? `出題領域のヒント: ${params.domainKey}（tags_raw に関連語を含めること）`
     : "出題領域: 例に近い領域でよいが、tags_raw を一貫して付けること。";
 
+  const tagsOut =
+    params.tagsRawOutputHint?.trim() ?
+      `新規作成する各問題の tags_raw は、次の表記にできるだけ合わせること（カンマ区切りの英語タグ推奨）: ${params.tagsRawOutputHint.trim()}`
+    : "";
+
   const userPayload = {
-    instruction: `${domainLine}\n新規問題を ${params.count} 問、指定スキーマの questions 配列で返してください。`,
+    instruction: [domainLine, tagsOut, `新規問題を ${params.count} 問、指定スキーマの questions 配列で返してください。`]
+      .filter(Boolean)
+      .join("\n"),
     reference_examples_json: params.examples.map((e) => ({
       stem: e.stem,
       choice_a: e.choice_a,
@@ -175,7 +207,10 @@ export async function generateQuestionsWithOpenAI(params: {
   const completion = await client.chat.completions.create({
     model,
     temperature: 0.55,
-    max_completion_tokens: Math.min(8000, 900 + params.count * 900),
+    max_completion_tokens: Math.min(
+      16000,
+      900 + params.count * 900 + Math.min(params.examples.length, 24) * 650
+    ),
     response_format: { type: "json_object" },
     messages: [
       { role: "system", content: buildSystemPrompt() },

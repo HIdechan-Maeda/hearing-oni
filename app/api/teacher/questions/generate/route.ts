@@ -6,6 +6,7 @@ import {
   isQuestionGenerateDomainKey,
   loadExampleQuestionsForGeneration,
   normalizeAnswerForDb,
+  sanitizeTagsRawHintInput,
   validateGeneratedDraft,
   type GeneratedQuestionDraft,
   type QuestionGenerateDomainKey,
@@ -16,8 +17,14 @@ export const runtime = "nodejs";
 
 type GenerateBody = {
   domainKey?: string | null;
+  /** 参考例の tags_raw に含まれる文字列（部分一致） */
+  tagsRawContains?: string | null;
+  /** 生成する問題の tags_raw の目安。省略時は tagsRawContains があればそれを流用 */
+  tagsRawOutputHint?: string | null;
   count?: number;
   exampleCount?: number;
+  /** questions_core から読む最大行数（その中からシャッフルして参考例を選ぶ） */
+  fetchPool?: number;
   persist?: boolean;
 };
 
@@ -40,8 +47,13 @@ export async function POST(req: Request) {
   }
 
   const count = Math.min(Math.max(Number(body.count ?? 1), 1), 8);
-  const exampleCount = Math.min(Math.max(Number(body.exampleCount ?? 4), 1), 10);
+  const exampleCount = Math.min(Math.max(Number(body.exampleCount ?? 4), 1), 20);
+  const fetchPool = Math.min(Math.max(Number(body.fetchPool ?? 1200), 50), 2000);
   const persist = Boolean(body.persist);
+
+  const tagsRawContains = sanitizeTagsRawHintInput(body.tagsRawContains ?? null);
+  const tagsRawOutputExplicit = sanitizeTagsRawHintInput(body.tagsRawOutputHint ?? null);
+  const tagsRawOutputHint = tagsRawOutputExplicit ?? tagsRawContains;
 
   const admin = createSupabaseAdmin();
   if (!admin) {
@@ -52,8 +64,9 @@ export async function POST(req: Request) {
   try {
     examples = await loadExampleQuestionsForGeneration(admin, {
       domainKey,
+      tagsRawContains,
       sampleSize: exampleCount,
-      fetchPool: 400,
+      fetchPool,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -65,7 +78,7 @@ export async function POST(req: Request) {
       {
         error: "no_examples",
         message:
-          "参考にする既存問題が取得できませんでした。questions_core にデータがあるか、領域指定なら tags_raw が一致する行があるか確認してください。",
+          "参考にする既存問題が取得できませんでした。questions_core にデータがあるか、領域・tags_raw 絞り込みを満たす行があるか、fetch_pool を大きくできるか確認してください。",
       },
       { status: 400 }
     );
@@ -73,7 +86,12 @@ export async function POST(req: Request) {
 
   let drafts: GeneratedQuestionDraft[];
   try {
-    drafts = await generateQuestionsWithOpenAI({ examples, domainKey, count });
+    drafts = await generateQuestionsWithOpenAI({
+      examples,
+      domainKey,
+      tagsRawOutputHint,
+      count,
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ error: "openai_failed", message: msg }, { status: 502 });
