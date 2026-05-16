@@ -322,27 +322,14 @@ function isOniDifficulty(difficulty: string | null | undefined): boolean {
 }
 
 /**
- * 試練（oni）用: Supabase は 1 回あたり件数に上限があるためページングで取り切る。
+ * 試練（oni）用: 全件をページング取得し、クライアントで isOniDifficulty を適用する。
+ * .ilike("difficulty","oni") だけだと difficulty=「鬼」の行が取りこぼされる。
  * 重要: range() だけだと行の順序が不定で、ページ間で重複・欠落が起きうるため必ず order する。
  */
 async function fetchAllOniQuestions(select: string): Promise<{ data: QuestionCore[]; error: { message: string } | null }> {
-  const out: QuestionCore[] = [];
-  let from = 0;
-  for (;;) {
-    const { data, error } = await supabase
-      .from("questions_core")
-      .select(select)
-      .ilike("difficulty", "oni")
-      .order("id", { ascending: true })
-      .range(from, from + ONI_FETCH_PAGE - 1);
-    if (error) return { data: [], error: { message: error.message } };
-    const chunk = (data ?? []) as unknown as QuestionCore[];
-    out.push(...chunk);
-    if (chunk.length < ONI_FETCH_PAGE) break;
-    from += ONI_FETCH_PAGE;
-  }
-  const filtered = out.filter((x) => isOniDifficulty(x.difficulty));
-  return { data: filtered, error: null };
+  const { data: all, error } = await fetchAllQuestionsCorePaged(select);
+  if (error) return { data: [], error };
+  return { data: all.filter((x) => isOniDifficulty(x.difficulty)), error: null };
 }
 
 /**
@@ -437,11 +424,11 @@ function SessionProgressBar({ current, total }: { current: number; total: number
 }
 
 function SessionPageInner() {
-  const [domain, setDomain] = useState<SessionDomainKey>("all");
-  const [mode, setMode] = useState<string>("");
-  const [questionCount, setQuestionCount] = useState<QuestionSetCount>(10);
-  const [includeKeywords, setIncludeKeywords] = useState<string[]>([]);
-  const [excludeKeywords, setExcludeKeywords] = useState<string[]>([]);
+  const [domain, setDomain] = useState<SessionDomainKey>(() => parseSessionLocation().domain);
+  const [mode, setMode] = useState<string>(() => parseSessionLocation().mode);
+  const [questionCount, setQuestionCount] = useState<QuestionSetCount>(() => parseSessionLocation().count);
+  const [includeKeywords, setIncludeKeywords] = useState<string[]>(() => parseSessionLocation().includeKeywords);
+  const [excludeKeywords, setExcludeKeywords] = useState<string[]>(() => parseSessionLocation().excludeKeywords);
 
   const [stage, setStage] = useState<Stage>("loading");
   const [questions, setQuestions] = useState<QuestionCore[]>([]);
@@ -651,6 +638,11 @@ function SessionPageInner() {
           }
           return;
         }
+      }
+      if (!cancelled && picked.length < questionCount) {
+        setMsg(
+          `希望 ${questionCount} 問ですが、条件に合う問題は ${filtered.length} 問のみです。${picked.length} 問で開始します。`
+        );
       }
       if (cancelled) return;
       saveLastSessionQuestionIds(picked.map((q) => q.id));
@@ -1059,16 +1051,25 @@ function pickAvoidingLastSession(
   const pickFn = pickRandom
     ? pickRandomSubset
     : (p: QuestionCore[], take: number) => pickDiverseQuestions(p, take, bucketKey);
+
+  const target = Math.min(n, pool.length);
+  if (target <= 0) return [];
+
   const preferred = pool.filter((q) => !excludeIds.has(q.id));
-  // 「最近出た問題」を強く避けるため、基本的には preferred だけから出題する。
-  // preferred が n 件に満たない場合は「足りない分は諦めて件数を減らす」ことで、
-  // 直前セッションとほぼ同じセットが再登場するのを防ぐ。
-  if (preferred.length === 0) {
-    // すべて最近出題済みなら従来どおりプール全体から選ぶ（出題不能を避けるための最終手段）
-    return pickFn(pool, n);
+  if (preferred.length >= target) {
+    return pickFn(preferred, target);
   }
-  const take = Math.min(n, preferred.length);
-  return pickFn(preferred, take);
+  if (preferred.length === 0) {
+    return pickFn(pool, target);
+  }
+
+  // 直近出題を避けたいが n 問に足りない → preferred を優先し、残りはプール全体から埋める
+  const first = pickFn(preferred, preferred.length);
+  const usedIds = new Set(first.map((q) => q.id));
+  const remainder = pool.filter((q) => !usedIds.has(q.id));
+  const need = target - first.length;
+  const second = pickFn(remainder, need);
+  return [...first, ...second].slice(0, target);
 }
 
 function nextReviewAt(reason: "wrong" | "hard") {

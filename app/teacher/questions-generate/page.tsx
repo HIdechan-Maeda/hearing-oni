@@ -157,6 +157,27 @@ export default function TeacherQuestionsGeneratePage() {
         <code>OPENAI_QUESTION_MODEL</code>（既定: gpt-4o-mini）。医学的事実は必ず人間が確認してください。
         参考例は DB から最大「参照プール」行を読み、その中からランダムに「参考例の件数」だけ OpenAI に渡します。
       </p>
+      <aside
+        style={{
+          marginTop: 12,
+          maxWidth: 800,
+          padding: "10px 12px",
+          fontSize: 12,
+          lineHeight: 1.55,
+          background: "#f4f8fc",
+          border: "1px solid #c5d6e8",
+          borderRadius: 6,
+        }}
+      >
+        <strong>生成結果がイマイチなとき</strong>（自動生成の限界です）:
+        <ul style={{ margin: "6px 0 0", paddingLeft: 20 }}>
+          <li>
+            <code>OPENAI_QUESTION_MODEL</code> を一段上のモデルにすると改善することがあります（料金・TPM に注意）。
+          </li>
+          <li>参考例を「良問だけ」に近づける（領域・tags_raw・参照プールで母集団を調整）。</li>
+          <li>保存前に stem / 誤答肢のリアリティ / 解説の根拠を人間が手直しする前提が安全です。</li>
+        </ul>
+      </aside>
 
       {loading && <p>読み込み中…</p>}
       {!loading && !okTeacher && msg && <p style={{ color: "#b00", whiteSpace: "pre-wrap" }}>{msg}</p>}

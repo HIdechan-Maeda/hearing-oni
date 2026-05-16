@@ -134,11 +134,19 @@ function toCoreForValidation(d: GeneratedQuestionDraft): QuestionCore {
   };
 }
 
+function normalizedChoiceKey(text: string): string {
+  return text.trim().normalize("NFKC").toLowerCase();
+}
+
 export function validateGeneratedDraft(d: GeneratedQuestionDraft): { ok: true } | { ok: false; reason: string } {
   if (!isNonEmpty(d.stem)) return { ok: false, reason: "問題文が空です。" };
   for (const key of ["choice_a", "choice_b", "choice_c", "choice_d", "choice_e"] as const) {
     if (!isNonEmpty(d[key])) return { ok: false, reason: `選択肢 ${key} が空です。` };
   }
+  const keys = new Set(
+    [d.choice_a, d.choice_b, d.choice_c, d.choice_d, d.choice_e].map((t) => normalizedChoiceKey(t))
+  );
+  if (keys.size !== 5) return { ok: false, reason: "選択肢の内容が重複しています（別の誤答にしてください）。" };
   if (!isNonEmpty(d.answer)) return { ok: false, reason: "正答が空です。" };
   const core = toCoreForValidation(d);
   const resolved = resolveCorrectChoices(core);
@@ -156,10 +164,20 @@ function buildSystemPrompt(): string {
     "あなたは言語聴覚士・聴覚学の学習用の五択問題を作成するアシスタントです。",
     "ユーザーが提示する「既存問題のJSON」は形式・難易度の参考にしつつ、設問・選択肢・解説はすべてオリジナルで新規に書いてください。",
     "既存の問題文をコピーしたり、特定の教材の記述を再現しないでください。",
+    "",
+    "【品質ルール（必須）】",
+    "- 問題文 stem は一文で主眼が明確に。「次のうち正しいのは」「誤っているのは」など、解答形式が読み取れる終わり方にする。",
+    "- 曖昧な括弧だらけ・二重否定の多用・「適切なものを選べ」のみ、のような抽象的すぎる出題は避ける。",
+    "- 選択肢 A〜E は内容が互いに重複しないこと（同義の言い換えだけ並べない）。長さは極端に偏らないようにする。",
+    "- 誤答肢は「ありがちな誤解」「用語の取り違え」「数値・単位の取り違え」など、学習者が選びそうなリアルな誤答にする。無意味なダミー文は禁止。",
+    "- 原則は単一正解。複数正解にする場合は設問文で複数選択が明確に分かる書き方にする。",
+    "- 解説 explain は日本語で 2〜5 文。正解の根拠と、代表的な誤答がなぜ誤りかを一言ずつ触れる。断定は根拠のある範囲に留める。",
+    "- 数値・閾値・周波数・dB などを出す場合は、一貫した単位と妥当な桁を用いる。",
+    "",
     "出力は JSON のみ。次の型に従うこと: { \"questions\": Array<{ \"stem\", \"choice_a\", \"choice_b\", \"choice_c\", \"choice_d\", \"choice_e\", \"answer\", \"explain\", \"tags_raw\" }> }",
     "answer は単一正解なら A〜E のいずれか1文字。複数正解の場合は英大文字をカンマ区切り（例: B,D）。",
     "tags_raw は英語のタグをカンマ区切りで（例: audiometry, screening）。日本語だけにしないこと。",
-    "解説 explain は学習に役立つ短い日本語（空にしない）。",
+    "解説 explain は空にしない。",
   ].join("\n");
 }
 
@@ -188,7 +206,12 @@ export async function generateQuestionsWithOpenAI(params: {
     : "";
 
   const userPayload = {
-    instruction: [domainLine, tagsOut, `新規問題を ${params.count} 問、指定スキーマの questions 配列で返してください。`]
+    instruction: [
+      domainLine,
+      tagsOut,
+      `新規問題を ${params.count} 問、指定スキーマの questions 配列で返してください。`,
+      "各問はシステム指示の「品質ルール」をすべて満たすこと。参考例より難易度を大きく外さないこと。",
+    ]
       .filter(Boolean)
       .join("\n"),
     reference_examples_json: params.examples.map((e) => ({
@@ -206,7 +229,7 @@ export async function generateQuestionsWithOpenAI(params: {
 
   const completion = await client.chat.completions.create({
     model,
-    temperature: 0.55,
+    temperature: 0.42,
     max_completion_tokens: Math.min(
       16000,
       900 + params.count * 900 + Math.min(params.examples.length, 24) * 650
