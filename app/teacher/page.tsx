@@ -14,6 +14,7 @@ import {
   isInvalidRefreshTokenMessage,
   signOutLocalIfRefreshTokenInvalid,
 } from "../../lib/supabaseInvalidSession";
+import { downloadCsv, rowsToCsv, sanitizeFilenamePart } from "../../lib/csvExport";
 
 type DomainKey =
   | "anatomy"
@@ -142,7 +143,9 @@ const MAX_LOG_ROWS_TO_SCAN = 10_000_000;
 export default function TeacherDashboardPage() {
   const [rows, setRows] = useState<UserRow[]>([]);
   const [msg, setMsg] = useState<string>("");
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [statsLoaded, setStatsLoaded] = useState(false);
+  const [teacherUserId, setTeacherUserId] = useState<string | null>(null);
   /** 集計したログ件数・人数（仕様の可視化） */
   const [aggregateMeta, setAggregateMeta] = useState<{
     logRows: number;
@@ -154,6 +157,9 @@ export default function TeacherDashboardPage() {
   const [rankAffOther, setRankAffOther] = useState("");
   const [rankGrade, setRankGrade] = useState("");
   const [rankRows, setRankRows] = useState<RankRow[]>([]);
+  const [rankLoadedMeta, setRankLoadedMeta] = useState<{ affiliation: string; grade: string } | null>(
+    null
+  );
   const [rankMsg, setRankMsg] = useState("");
   const [rankLoading, setRankLoading] = useState(false);
   const [dailyLogin, setDailyLogin] = useState<DailyLoginResponse | null>(null);
@@ -161,11 +167,8 @@ export default function TeacherDashboardPage() {
   const [dailyLoginMsg, setDailyLoginMsg] = useState("");
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
+    const checkTeacher = async () => {
       setMsg("");
-
-      // ログインユーザー確認
       const { data: userData, error: userErr } = await supabase.auth.getUser();
       if (userErr) {
         await signOutLocalIfRefreshTokenInvalid(supabase, userErr.message);
@@ -174,138 +177,152 @@ export default function TeacherDashboardPage() {
             ? "保存されていたログイン情報が無効です。一度ログアウト済みです。ホームから再度ログインしてください。"
             : "ログインしてください。"
         );
-        setLoading(false);
         return;
       }
       if (!userData.user) {
         setMsg("ログインしてください。");
-        setLoading(false);
         return;
       }
-      const me = userData.user;
 
-      // 自分のロール確認（profiles.role === 'teacher' を想定）
       const { data: myProfile, error: profErr } = await supabase
         .from("profiles")
         .select("user_id,email,name,role")
-        .eq("user_id", me.id)
+        .eq("user_id", userData.user.id)
         .maybeSingle<ProfileRow>();
 
       if (profErr) {
         setMsg(
           "プロフィール取得エラー: " + formatSupabaseError(profErr) + supabaseProfileErrorHints(profErr.message)
         );
-        setLoading(false);
         return;
       }
 
       const isTeacherRole = (myProfile?.role ?? "").trim().toLowerCase() === "teacher";
       if (!myProfile || !isTeacherRole) {
         setMsg("教師権限が必要です。profiles.role = 'teacher' に設定してください。");
-        setLoading(false);
         return;
       }
 
-      // 全 logs をページング取得して集計（1 回だけ limit すると直近 N 件に「活発な少数ユーザー」が偏り、他の受講生が表に出ない。また API の行数上限で 1000 件などに切られることがある）
-      const statsByUser: Record<string, Record<DomainKey, DomainStat>> = {};
-      let totalLogRows = 0;
-      let offset = 0;
-      let truncated = false;
-      while (totalLogRows < MAX_LOG_ROWS_TO_SCAN) {
-        const { data: page, error: logsErr } = await supabase
-          .from("logs")
-          .select("user_id,is_correct,tags_raw")
-          .order("answered_at", { ascending: false })
-          .range(offset, offset + LOGS_PAGE_SIZE - 1);
-
-        if (logsErr) {
-          setMsg("ログ取得エラー: " + logsErr.message);
-          setAggregateMeta(null);
-          setLoading(false);
-          return;
-        }
-        if (!page?.length) break;
-
-        for (const log of page as Array<{ user_id: string; is_correct: boolean; tags_raw: string | null }>) {
-          const uid = log.user_id;
-          if (!uid) continue;
-
-          if (!statsByUser[uid]) {
-            const initStats: Record<DomainKey, DomainStat> = {} as any;
-            for (const { key } of DOMAIN_OPTIONS) {
-              initStats[key] = { total: 0, correct: 0 };
-            }
-            statsByUser[uid] = initStats;
-          }
-
-          const isCorrect = !!log.is_correct;
-          for (const { key } of DOMAIN_OPTIONS) {
-            if (logTagsMatchDomainDetailed(log.tags_raw, key)) {
-              statsByUser[uid][key].total += 1;
-              if (isCorrect) statsByUser[uid][key].correct += 1;
-            }
-          }
-        }
-        totalLogRows += page.length;
-        if (totalLogRows >= MAX_LOG_ROWS_TO_SCAN) {
-          truncated = true;
-          break;
-        }
-        if (page.length < LOGS_PAGE_SIZE) break;
-        offset += LOGS_PAGE_SIZE;
-      }
-
-      if (totalLogRows === 0) {
-        setRows([]);
-        setAggregateMeta(null);
-        setLoading(false);
-        return;
-      }
-
-      const userIds = Object.keys(statsByUser);
-
-      const { profiles: profileList, error: batchErr } = await fetchProfilesBatch(userIds);
-      if (batchErr) {
-        setMsg(
-          "受講生プロフィール取得エラー: " +
-            batchErr +
-            "\n\n※ ログに出ている user が非常に多い場合は、.in() の件数制限で失敗することがあります（バッチ取得に変更済み）。affiliation / grade カラムが無い場合は name のみで取得します。"
-        );
-        setAggregateMeta(null);
-        setLoading(false);
-        return;
-      }
-
-      const profileMap = new Map<string, ProfileRowLite>();
-      for (const p of profileList) {
-        profileMap.set(p.user_id, p);
-      }
-
-      const resultRows: UserRow[] = Object.entries(statsByUser)
-        // 教師自身のログは除外
-        .filter(([uid]) => uid !== me.id)
-        .map(([uid, stats]) => {
-          const prof = profileMap.get(uid);
-          return {
-            userId: uid,
-            name: prof?.name ?? null,
-            email: prof?.email ?? "(email不明)",
-            affiliation: prof?.affiliation ?? null,
-            grade: prof?.grade ?? null,
-            stats,
-          };
-        });
-
-      // 表示を安定させるためメールでソート
-      resultRows.sort((a, b) => a.email.localeCompare(b.email));
-
-      setAggregateMeta({ logRows: totalLogRows, studentCount: resultRows.length, truncated });
-      setRows(resultRows);
-      setLoading(false);
+      setTeacherUserId(userData.user.id);
     };
 
-    load();
+    checkTeacher();
   }, []);
+
+  const loadDomainStats = async () => {
+    if (!teacherUserId) {
+      setMsg("教師権限の確認が完了していません。ページを再読み込みしてください。");
+      return;
+    }
+    const me = { id: teacherUserId };
+
+    setLoading(true);
+    setMsg("");
+    setStatsLoaded(false);
+    setRows([]);
+    setAggregateMeta(null);
+
+    // 全 logs をページング取得して集計（1 回だけ limit すると直近 N 件に「活発な少数ユーザー」が偏り、他の受講生が表に出ない。また API の行数上限で 1000 件などに切られることがある）
+    const statsByUser: Record<string, Record<DomainKey, DomainStat>> = {};
+    let totalLogRows = 0;
+    let offset = 0;
+    let truncated = false;
+    while (totalLogRows < MAX_LOG_ROWS_TO_SCAN) {
+      const { data: page, error: logsErr } = await supabase
+        .from("logs")
+        .select("user_id,is_correct,tags_raw")
+        .order("answered_at", { ascending: false })
+        .range(offset, offset + LOGS_PAGE_SIZE - 1);
+
+      if (logsErr) {
+        setMsg("ログ取得エラー: " + logsErr.message);
+        setAggregateMeta(null);
+        setStatsLoaded(true);
+        setLoading(false);
+        return;
+      }
+      if (!page?.length) break;
+
+      for (const log of page as Array<{ user_id: string; is_correct: boolean; tags_raw: string | null }>) {
+        const uid = log.user_id;
+        if (!uid) continue;
+
+        if (!statsByUser[uid]) {
+          const initStats: Record<DomainKey, DomainStat> = {} as any;
+          for (const { key } of DOMAIN_OPTIONS) {
+            initStats[key] = { total: 0, correct: 0 };
+          }
+          statsByUser[uid] = initStats;
+        }
+
+        const isCorrect = !!log.is_correct;
+        for (const { key } of DOMAIN_OPTIONS) {
+          if (logTagsMatchDomainDetailed(log.tags_raw, key)) {
+            statsByUser[uid][key].total += 1;
+            if (isCorrect) statsByUser[uid][key].correct += 1;
+          }
+        }
+      }
+      totalLogRows += page.length;
+      if (totalLogRows >= MAX_LOG_ROWS_TO_SCAN) {
+        truncated = true;
+        break;
+      }
+      if (page.length < LOGS_PAGE_SIZE) break;
+      offset += LOGS_PAGE_SIZE;
+    }
+
+    if (totalLogRows === 0) {
+      setRows([]);
+      setAggregateMeta(null);
+      setStatsLoaded(true);
+      setLoading(false);
+      return;
+    }
+
+    const userIds = Object.keys(statsByUser);
+
+    const { profiles: profileList, error: batchErr } = await fetchProfilesBatch(userIds);
+    if (batchErr) {
+      setMsg(
+        "受講生プロフィール取得エラー: " +
+          batchErr +
+          "\n\n※ ログに出ている user が非常に多い場合は、.in() の件数制限で失敗することがあります（バッチ取得に変更済み）。affiliation / grade カラムが無い場合は name のみで取得します。"
+      );
+      setAggregateMeta(null);
+      setStatsLoaded(true);
+      setLoading(false);
+      return;
+    }
+
+    const profileMap = new Map<string, ProfileRowLite>();
+    for (const p of profileList) {
+      profileMap.set(p.user_id, p);
+    }
+
+    const resultRows: UserRow[] = Object.entries(statsByUser)
+      // 教師自身のログは除外
+      .filter(([uid]) => uid !== me.id)
+      .map(([uid, stats]) => {
+        const prof = profileMap.get(uid);
+        return {
+          userId: uid,
+          name: prof?.name ?? null,
+          email: prof?.email ?? "(email不明)",
+          affiliation: prof?.affiliation ?? null,
+          grade: prof?.grade ?? null,
+          stats,
+        };
+      });
+
+    // 表示を安定させるためメールでソート
+    resultRows.sort((a, b) => a.email.localeCompare(b.email));
+
+    setAggregateMeta({ logRows: totalLogRows, studentCount: resultRows.length, truncated });
+    setRows(resultRows);
+    setStatsLoaded(true);
+    setLoading(false);
+  };
 
   const loadDailyLogin = async () => {
     setDailyLoginLoading(true);
@@ -354,6 +371,7 @@ export default function TeacherDashboardPage() {
       return;
     }
     setRankLoading(true);
+    setRankLoadedMeta(null);
     const { data, error } = await supabase.rpc("leaderboard_cohort", {
       p_affiliation: effAff,
       p_grade: effGrade,
@@ -366,6 +384,7 @@ export default function TeacherDashboardPage() {
           supabaseLeaderboardRpcHint(error.message)
       );
       setRankRows([]);
+      setRankLoadedMeta(null);
       return;
     }
     const list = (data ?? []) as Array<{
@@ -382,9 +401,11 @@ export default function TeacherDashboardPage() {
     if (profErr) {
       setRankMsg("プロフィール（メール）取得エラー: " + profErr);
       setRankRows([]);
+      setRankLoadedMeta(null);
       return;
     }
     const emailByUser = new Map(rankProfiles.map((p) => [p.user_id, p.email]));
+    setRankLoadedMeta({ affiliation: effAff, grade: effGrade });
     setRankRows(
       list.map((r) => ({
         rank: Number(r.rank),
@@ -401,6 +422,35 @@ export default function TeacherDashboardPage() {
     }
   };
 
+  const downloadRankingCsv = () => {
+    if (rankRows.length === 0 || !rankLoadedMeta) return;
+    const header: Array<string | number> = [
+      "所属",
+      "学年",
+      "順位",
+      "ニックネーム",
+      "メールアドレス",
+      "正解数",
+      "解答数",
+      "正答率(%)",
+    ];
+    const dataRows = rankRows.map((r) => [
+      rankLoadedMeta.affiliation,
+      rankLoadedMeta.grade,
+      r.rank,
+      r.display_name,
+      r.email,
+      r.total_correct,
+      r.total_answered,
+      r.accuracy_pct,
+    ]);
+    const csv = rowsToCsv([header, ...dataRows]);
+    const date = new Date().toISOString().slice(0, 10);
+    const aff = sanitizeFilenamePart(rankLoadedMeta.affiliation);
+    const grade = sanitizeFilenamePart(rankLoadedMeta.grade);
+    downloadCsv(`ranking_${aff}_${grade}_${date}.csv`, csv);
+  };
+
   const hasData = useMemo(() => rows.length > 0, [rows.length]);
 
   return (
@@ -415,6 +465,17 @@ export default function TeacherDashboardPage() {
       </p>
       <p style={{ fontSize: 12, color: "#1a2d42", marginTop: 8, lineHeight: 1.55, maxWidth: 720 }}>
         解答ログを<strong>全件</strong>（ページ分割）集計し、ログが 1 件以上ある受講生を一覧表示します。以前は直近のみの取得で人数が少なく見えることがありました。
+        負荷軽減のため、表示はボタン押下時のみ実行します（ログ件数が多いと 1 分近くかかることがあります）。
+      </p>
+      <p style={{ marginTop: 8 }}>
+        <button
+          type="button"
+          onClick={loadDomainStats}
+          disabled={loading || !teacherUserId}
+          style={{ padding: "8px 16px", cursor: "pointer" }}
+        >
+          {loading ? "集計中..." : statsLoaded ? "領域別正答率を再表示" : "領域別正答率を表示"}
+        </button>
       </p>
 
       {msg && <p style={{ color: "#b00", whiteSpace: "pre-wrap" }}>{msg}</p>}
@@ -481,7 +542,7 @@ export default function TeacherDashboardPage() {
         </div>
       )}
 
-      {!loading && !hasData && !msg && <p>まだログがありません。</p>}
+      {statsLoaded && !loading && !hasData && !msg && <p>まだログがありません。</p>}
 
       <hr style={{ margin: "28px 0" }} />
       <h2 style={{ fontSize: 18, marginBottom: 8 }}>学生の日別ログイン状況（直近14日）</h2>
@@ -552,6 +613,7 @@ export default function TeacherDashboardPage() {
       <h2 style={{ fontSize: 18, marginBottom: 8 }}>ランキング（所属・学年グループ別）</h2>
       <p style={{ fontSize: 13, color: "#1a2d42", marginTop: 0 }}>
         受講生のプロフィールに登録された所属・学年が一致するグループ内で、正解数・正答率の順位を表示します。
+        表示後は順位・メール・正解数・解答数・正答率などを <strong>CSV</strong> でダウンロードできます（Excel でも開けます）。
       </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginBottom: 10 }}>
         <div>
@@ -598,7 +660,22 @@ export default function TeacherDashboardPage() {
       </div>
       {rankMsg && <p style={{ color: "#b00", fontSize: 13, whiteSpace: "pre-wrap" }}>{rankMsg}</p>}
       {!rankLoading && rankRows.length > 0 && (
-        <div style={{ overflowX: "auto", marginTop: 8 }}>
+        <>
+        <p style={{ marginTop: 8, marginBottom: 8 }}>
+          <button
+            type="button"
+            onClick={downloadRankingCsv}
+            style={{ padding: "8px 16px", cursor: "pointer" }}
+          >
+            ランキングを CSV ダウンロード
+          </button>
+          {rankLoadedMeta && (
+            <span style={{ marginLeft: 10, fontSize: 12, color: "#1a2d42" }}>
+              対象: {rankLoadedMeta.affiliation} ／ {rankLoadedMeta.grade}（{rankRows.length} 名）
+            </span>
+          )}
+        </p>
+        <div style={{ overflowX: "auto", marginTop: 0 }}>
           <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 520, fontSize: 13 }}>
             <thead>
               <tr style={{ background: "#f5f5f5" }}>
@@ -625,6 +702,7 @@ export default function TeacherDashboardPage() {
             </tbody>
           </table>
         </div>
+        </>
       )}
       <hr style={{ margin: "18px 0" }} />
       <Link href="/">ホームへ</Link>
