@@ -116,6 +116,7 @@ type RankRow = {
   rank: number;
   user_id: string;
   display_name: string;
+  email: string;
   total_answered: number;
   total_correct: number;
   accuracy_pct: number;
@@ -375,11 +376,21 @@ export default function TeacherDashboardPage() {
       total_correct: number;
       accuracy_pct: number;
     }>;
+    const { profiles: rankProfiles, error: profErr } = await fetchProfilesBatch(
+      list.map((r) => r.user_id)
+    );
+    if (profErr) {
+      setRankMsg("プロフィール（メール）取得エラー: " + profErr);
+      setRankRows([]);
+      return;
+    }
+    const emailByUser = new Map(rankProfiles.map((p) => [p.user_id, p.email]));
     setRankRows(
       list.map((r) => ({
         rank: Number(r.rank),
         user_id: r.user_id,
         display_name: r.display_name,
+        email: emailByUser.get(r.user_id) ?? "(email不明)",
         total_answered: Number(r.total_answered),
         total_correct: Number(r.total_correct),
         accuracy_pct: Number(r.accuracy_pct),
@@ -602,7 +613,10 @@ export default function TeacherDashboardPage() {
               {rankRows.map((r) => (
                 <tr key={r.user_id}>
                   <td style={tdStyle}>{r.rank}</td>
-                  <td style={tdStyle}>{r.display_name}</td>
+                  <td style={tdStyle}>
+                    <div>{r.display_name}</div>
+                    <div style={{ color: "#1a2d42", fontSize: 12 }}>{r.email}</div>
+                  </td>
                   <td style={{ ...tdStyle, textAlign: "right" }}>{r.total_correct}</td>
                   <td style={{ ...tdStyle, textAlign: "right" }}>{r.total_answered}</td>
                   <td style={{ ...tdStyle, textAlign: "right" }}>{r.accuracy_pct}%</td>
