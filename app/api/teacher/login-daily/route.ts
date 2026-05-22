@@ -1,16 +1,29 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { GRADE_OPTIONS, normalizeGradeFromDb } from "@/lib/profileFieldOptions";
 import { createSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const runtime = "nodejs";
 const LOG_PAGE_SIZE = 1000;
 const MAX_LOG_SCAN = 200_000;
+/** プロフィールに学年が無い受講生の表示用ラベル */
+const GRADE_UNSET_LABEL = "(学年未設定)";
 
 type ProfileRow = {
   user_id: string;
   email: string;
   name: string | null;
   role: string | null;
+  affiliation?: string | null;
+  grade?: string | null;
+};
+
+type StudentBase = {
+  userId: string;
+  email: string;
+  name: string | null;
+  affiliation: string | null;
+  grade: string | null;
 };
 
 function toDateKeyJst(source: string | Date): string {
@@ -29,6 +42,26 @@ function getDateKeys(days: number): string[] {
     list.push(d.toISOString().slice(0, 10));
   }
   return list;
+}
+
+function buildSummaryByDay(
+  cohort: StudentBase[],
+  dateKeys: string[],
+  activeMap: Map<string, Set<string>>
+): Array<{ date: string; activeStudents: number; totalStudents: number }> {
+  return dateKeys.map((date) => {
+    let activeStudents = 0;
+    for (const student of cohort) {
+      if (activeMap.get(student.userId)?.has(date)) activeStudents += 1;
+    }
+    return { date, activeStudents, totalStudents: cohort.length };
+  });
+}
+
+function sortGrades(grades: string[]): string[] {
+  const known = GRADE_OPTIONS.filter((g) => grades.includes(g));
+  const rest = grades.filter((g) => !GRADE_OPTIONS.includes(g as (typeof GRADE_OPTIONS)[number])).sort();
+  return [...known, ...rest];
 }
 
 export async function GET(req: Request) {
@@ -68,32 +101,68 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const inputDays = Number(new URL(req.url).searchParams.get("days") ?? "14");
+  const searchParams = new URL(req.url).searchParams;
+  const inputDays = Number(searchParams.get("days") ?? "14");
   const days = Number.isFinite(inputDays) ? Math.min(Math.max(Math.trunc(inputDays), 1), 31) : 14;
+  const filterAffiliation = (searchParams.get("affiliation") ?? "").trim();
+  const filterGradeRaw = (searchParams.get("grade") ?? "").trim();
+  const filterGrade = filterGradeRaw ? normalizeGradeFromDb(filterGradeRaw) : "";
+
   const dateKeys = getDateKeys(days);
   const oldestDate = dateKeys[dateKeys.length - 1];
 
-  const { data: profiles, error: profilesError } = await admin
+  const full = await admin
     .from("profiles")
-    .select("user_id,email,name,role")
+    .select("user_id,email,name,role,affiliation,grade")
     .eq("role", "student")
     .order("email", { ascending: true });
-  if (profilesError) {
-    return NextResponse.json({ error: "profiles_fetch_failed" }, { status: 500 });
+
+  let profileRows: ProfileRow[] = [];
+  if (!full.error && full.data) {
+    profileRows = full.data as ProfileRow[];
+  } else {
+    const minimal = await admin
+      .from("profiles")
+      .select("user_id,email,name,role")
+      .eq("role", "student")
+      .order("email", { ascending: true });
+    if (minimal.error) {
+      return NextResponse.json({ error: "profiles_fetch_failed" }, { status: 500 });
+    }
+    profileRows = (minimal.data ?? []) as ProfileRow[];
   }
 
-  const students = ((profiles ?? []) as ProfileRow[]).map((p) => ({
+  let students: StudentBase[] = profileRows.map((p) => ({
     userId: p.user_id,
     email: p.email,
     name: p.name,
+    affiliation: (p.affiliation ?? "").trim() || null,
+    grade: normalizeGradeFromDb(p.grade) || null,
   }));
+
+  if (filterAffiliation) {
+    students = students.filter((s) => s.affiliation === filterAffiliation);
+  }
+  if (filterGrade) {
+    students = students.filter((s) => s.grade === filterGrade);
+  }
+
   const studentIds = students.map((s) => s.userId);
+  const emptyResponse = {
+    days: dateKeys,
+    filter: { affiliation: filterAffiliation || null, grade: filterGrade || null },
+    summaryByDay: dateKeys.map((date) => ({ date, activeStudents: 0, totalStudents: 0 })),
+    summaryByDayByGrade: [] as Array<{
+      grade: string;
+      summaryByDay: Array<{ date: string; activeStudents: number; totalStudents: number }>;
+    }>,
+    students: [] as Array<
+      StudentBase & { activeDays: number; activeByDay: Record<string, boolean> }
+    >,
+  };
+
   if (studentIds.length === 0) {
-    return NextResponse.json({
-      days: dateKeys,
-      summaryByDay: dateKeys.map((date) => ({ date, activeStudents: 0 })),
-      students: [],
-    });
+    return NextResponse.json(emptyResponse);
   }
 
   const activeMap = new Map<string, Set<string>>();
@@ -131,13 +200,27 @@ export async function GET(req: Request) {
     offset += LOG_PAGE_SIZE;
   }
 
-  const summaryByDay = dateKeys.map((date) => {
-    let activeStudents = 0;
-    for (const student of students) {
-      if (activeMap.get(student.userId)?.has(date)) activeStudents += 1;
-    }
-    return { date, activeStudents };
-  });
+  const summaryByDay = buildSummaryByDay(students, dateKeys, activeMap);
+
+  const gradesForBreakdown = filterGrade
+    ? [filterGrade]
+    : (() => {
+        const fromProfiles = sortGrades([
+          ...new Set(students.map((s) => s.grade).filter((g): g is string => !!g)),
+        ]);
+        const hasUnset = students.some((s) => !s.grade);
+        return hasUnset ? [...fromProfiles, GRADE_UNSET_LABEL] : fromProfiles;
+      })();
+
+  const cohortForGrade = (grade: string) =>
+    grade === GRADE_UNSET_LABEL
+      ? students.filter((s) => !s.grade)
+      : students.filter((s) => s.grade === grade);
+
+  const summaryByDayByGrade = gradesForBreakdown.map((grade) => ({
+    grade,
+    summaryByDay: buildSummaryByDay(cohortForGrade(grade), dateKeys, activeMap),
+  }));
 
   const studentRows = students
     .map((student) => {
@@ -150,11 +233,18 @@ export async function GET(req: Request) {
         activeByDay,
       };
     })
-    .sort((a, b) => b.activeDays - a.activeDays || a.email.localeCompare(b.email));
+    .sort(
+      (a, b) =>
+        (a.grade ?? "").localeCompare(b.grade ?? "", "ja") ||
+        b.activeDays - a.activeDays ||
+        a.email.localeCompare(b.email)
+    );
 
   return NextResponse.json({
     days: dateKeys,
+    filter: { affiliation: filterAffiliation || null, grade: filterGrade || null },
     summaryByDay,
+    summaryByDayByGrade,
     students: studentRows,
   });
 }

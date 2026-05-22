@@ -123,22 +123,44 @@ type RankRow = {
   accuracy_pct: number;
 };
 
+type DailyLoginDaySummary = {
+  date: string;
+  activeStudents: number;
+  totalStudents: number;
+};
+
+type DailyLoginStudentRow = {
+  userId: string;
+  email: string;
+  name: string | null;
+  affiliation: string | null;
+  grade: string | null;
+  activeDays: number;
+  activeByDay: Record<string, boolean>;
+};
+
 type DailyLoginResponse = {
   days: string[];
-  summaryByDay: Array<{ date: string; activeStudents: number }>;
-  students: Array<{
-    userId: string;
-    email: string;
-    name: string | null;
-    activeDays: number;
-    activeByDay: Record<string, boolean>;
-  }>;
+  filter: { affiliation: string | null; grade: string | null };
+  summaryByDay: DailyLoginDaySummary[];
+  summaryByDayByGrade: Array<{ grade: string; summaryByDay: DailyLoginDaySummary[] }>;
+  students: DailyLoginStudentRow[];
 };
 
 /** PostgREST は 1 リクエストあたりの行数に上限（例: 1000）があり、.limit(80000) でも切られることがある。全件は range でページングする。 */
 const LOGS_PAGE_SIZE = 1000;
 /** 無限ループ防止（この件数まで取得） */
 const MAX_LOG_ROWS_TO_SCAN = 10_000_000;
+const DAILY_LOGIN_GRADE_UNSET = "(学年未設定)";
+
+function dailyLoginStudentsInGrade(
+  students: DailyLoginStudentRow[],
+  grade: string
+): DailyLoginStudentRow[] {
+  return grade === DAILY_LOGIN_GRADE_UNSET
+    ? students.filter((s) => !s.grade)
+    : students.filter((s) => s.grade === grade);
+}
 
 export default function TeacherDashboardPage() {
   const [rows, setRows] = useState<UserRow[]>([]);
@@ -162,7 +184,14 @@ export default function TeacherDashboardPage() {
   );
   const [rankMsg, setRankMsg] = useState("");
   const [rankLoading, setRankLoading] = useState(false);
+  const [loginAff, setLoginAff] = useState("");
+  const [loginAffOther, setLoginAffOther] = useState("");
+  const [loginGrade, setLoginGrade] = useState("");
   const [dailyLogin, setDailyLogin] = useState<DailyLoginResponse | null>(null);
+  const [dailyLoginLoadedMeta, setDailyLoginLoadedMeta] = useState<{
+    affiliation: string;
+    grade: string | null;
+  } | null>(null);
   const [dailyLoginLoading, setDailyLoginLoading] = useState(false);
   const [dailyLoginMsg, setDailyLoginMsg] = useState("");
 
@@ -325,8 +354,17 @@ export default function TeacherDashboardPage() {
   };
 
   const loadDailyLogin = async () => {
+    const effAff = loginAff === "その他" ? loginAffOther.trim() : loginAff.trim();
+    const effGrade = loginGrade.trim() ? normalizeGradeFromDb(loginGrade.trim()) : "";
+    if (!effAff) {
+      setDailyLoginMsg("所属を選択してください。「その他」の場合は所属名も入力してください。");
+      return;
+    }
+
     setDailyLoginLoading(true);
     setDailyLoginMsg("");
+    setDailyLogin(null);
+    setDailyLoginLoadedMeta(null);
     const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
     if (sessionErr) {
       await signOutLocalIfRefreshTokenInvalid(supabase, sessionErr.message);
@@ -344,7 +382,9 @@ export default function TeacherDashboardPage() {
       setDailyLoginMsg("日別ログインの取得には再ログインが必要です。");
       return;
     }
-    const res = await fetch("/api/teacher/login-daily?days=14", {
+    const params = new URLSearchParams({ days: "14", affiliation: effAff });
+    if (effGrade) params.set("grade", effGrade);
+    const res = await fetch(`/api/teacher/login-daily?${params.toString()}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const body = (await res.json().catch(() => ({}))) as Partial<DailyLoginResponse> & { error?: string };
@@ -358,7 +398,35 @@ export default function TeacherDashboardPage() {
       return;
     }
     setDailyLogin(body as DailyLoginResponse);
+    setDailyLoginLoadedMeta({ affiliation: effAff, grade: effGrade || null });
     setDailyLoginLoading(false);
+  };
+
+  const downloadDailyLoginCsv = () => {
+    if (!dailyLogin || !dailyLoginLoadedMeta) return;
+    const header: Array<string | number> = [
+      "所属",
+      "学年",
+      "ニックネーム",
+      "メールアドレス",
+      "ログイン日数",
+      ...dailyLogin.days.map((d) => d),
+    ];
+    const dataRows = dailyLogin.students.map((s) => [
+      s.affiliation ?? dailyLoginLoadedMeta.affiliation,
+      s.grade ?? "",
+      s.name ?? "(名前未設定)",
+      s.email,
+      s.activeDays,
+      ...dailyLogin.days.map((d) => (s.activeByDay[d] ? "○" : "")),
+    ]);
+    const csv = rowsToCsv([header, ...dataRows]);
+    const date = new Date().toISOString().slice(0, 10);
+    const aff = sanitizeFilenamePart(dailyLoginLoadedMeta.affiliation);
+    const gradePart = dailyLoginLoadedMeta.grade
+      ? sanitizeFilenamePart(dailyLoginLoadedMeta.grade)
+      : "全学年";
+    downloadCsv(`login_daily_${aff}_${gradePart}_${date}.csv`, csv);
   };
 
   const loadRanking = async () => {
@@ -547,65 +615,187 @@ export default function TeacherDashboardPage() {
       <hr style={{ margin: "28px 0" }} />
       <h2 style={{ fontSize: 18, marginBottom: 8 }}>学生の日別ログイン状況（直近14日）</h2>
       <p style={{ fontSize: 13, color: "#1a2d42", marginTop: 0 }}>
-        解答ログ（`logs.answered_at`）をもとに、学生ごとの日別アクティブ状況を表示します。
+        解答ログ（`logs.answered_at`）をもとに、所属・学年で絞った受講生の日別アクティブ状況を表示します。
+        学年は「全学年」で学年ごとのサマリ、特定学年でその学年の詳細一覧を表示できます。CSV でもダウンロードできます。
       </p>
-      <p style={{ marginTop: 0 }}>
-        <button type="button" onClick={loadDailyLogin} disabled={dailyLoginLoading} style={{ padding: "8px 16px", cursor: "pointer" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginBottom: 10 }}>
+        <div>
+          <div style={{ fontSize: 12, marginBottom: 4, fontWeight: 600, color: "#0b315b" }}>所属</div>
+          <select
+            className="input-elegant"
+            value={loginAff}
+            onChange={(e) => {
+              setLoginAff(e.target.value);
+              if (e.target.value !== "その他") setLoginAffOther("");
+            }}
+            style={{ minWidth: 180 }}
+          >
+            <option value="">選択</option>
+            {AFFILIATION_PRESETS.map((a) => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+        </div>
+        {loginAff === "その他" && (
+          <div>
+            <div style={{ fontSize: 12, marginBottom: 4, fontWeight: 600, color: "#0b315b" }}>所属（記入）</div>
+            <input
+              className="input-elegant"
+              value={loginAffOther}
+              onChange={(e) => setLoginAffOther(e.target.value)}
+              placeholder="所属名"
+              style={{ width: 200 }}
+            />
+          </div>
+        )}
+        <div>
+          <div style={{ fontSize: 12, marginBottom: 4, fontWeight: 600, color: "#0b315b" }}>学年</div>
+          <select
+            className="input-elegant"
+            value={loginGrade}
+            onChange={(e) => setLoginGrade(e.target.value)}
+            style={{ minWidth: 120 }}
+          >
+            <option value="">全学年</option>
+            {GRADE_OPTIONS.map((g) => (
+              <option key={g} value={g}>{g}</option>
+            ))}
+          </select>
+        </div>
+        <button
+          type="button"
+          onClick={loadDailyLogin}
+          disabled={dailyLoginLoading}
+          style={{ padding: "8px 16px", cursor: "pointer" }}
+        >
           {dailyLoginLoading ? "取得中..." : "日別ログインを表示"}
         </button>
-      </p>
-      {dailyLoginMsg && <p style={{ color: "#b00", fontSize: 13 }}>{dailyLoginMsg}</p>}
-      {!dailyLoginLoading && dailyLogin && (
+      </div>
+      {dailyLoginMsg && <p style={{ color: "#b00", fontSize: 13, whiteSpace: "pre-wrap" }}>{dailyLoginMsg}</p>}
+      {!dailyLoginLoading && dailyLogin && dailyLoginLoadedMeta && (
         <>
-          <div style={{ overflowX: "auto", marginTop: 8 }}>
-            <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 520, fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: "#f5f5f5" }}>
-                  <th style={thStyle}>日付</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>ログイン学生数</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dailyLogin.summaryByDay.map((s) => (
-                  <tr key={s.date}>
-                    <td style={tdStyle}>{s.date}</td>
-                    <td style={{ ...tdStyle, textAlign: "right" }}>{s.activeStudents} 名</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div style={{ overflowX: "auto", marginTop: 12 }}>
-            <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 900, fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: "#f5f5f5" }}>
-                  <th style={thStyle}>学生</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>14日間のログイン日数</th>
-                  {dailyLogin.days.map((d) => (
-                    <th key={d} style={{ ...thStyle, textAlign: "center", whiteSpace: "nowrap" }}>
-                      {d.slice(5)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {dailyLogin.students.map((s) => (
-                  <tr key={s.userId}>
-                    <td style={tdStyle}>
-                      <div>{s.name ?? "(名前未設定)"}</div>
-                      <div style={{ color: "#1a2d42", fontSize: 12 }}>{s.email}</div>
-                    </td>
-                    <td style={{ ...tdStyle, textAlign: "right" }}>{s.activeDays} 日</td>
-                    {dailyLogin.days.map((d) => (
-                      <td key={d} style={{ ...tdStyle, textAlign: "center" }}>
-                        {s.activeByDay[d] ? "◯" : "-"}
-                      </td>
+          <p style={{ marginTop: 8, marginBottom: 8, fontSize: 13, color: "#0b315b" }}>
+            対象: <strong>{dailyLoginLoadedMeta.affiliation}</strong>
+            {" ／ "}
+            <strong>{dailyLoginLoadedMeta.grade ?? "全学年"}</strong>
+            （{dailyLogin.students.length} 名）
+            <button
+              type="button"
+              onClick={downloadDailyLoginCsv}
+              disabled={dailyLogin.students.length === 0}
+              style={{ marginLeft: 12, padding: "6px 14px", cursor: "pointer" }}
+            >
+              日別ログインを CSV ダウンロード
+            </button>
+          </p>
+          {dailyLogin.summaryByDayByGrade.length > 0 && (
+            <div style={{ overflowX: "auto", marginTop: 8 }}>
+              <h3 style={{ fontSize: 15, margin: "0 0 8px", color: "#0b315b" }}>日別サマリ（学年別）</h3>
+              <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 520, fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: "#f5f5f5" }}>
+                    <th style={thStyle}>日付</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>全体</th>
+                    {dailyLogin.summaryByDayByGrade.map((g) => (
+                      <th key={g.grade} style={{ ...thStyle, textAlign: "right" }}>
+                        {g.grade}
+                      </th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {dailyLogin.days.map((date, i) => (
+                    <tr key={date}>
+                      <td style={tdStyle}>{date}</td>
+                      <td style={{ ...tdStyle, textAlign: "right" }}>
+                        {dailyLogin.summaryByDay[i]?.activeStudents ?? 0} /{" "}
+                        {dailyLogin.summaryByDay[i]?.totalStudents ?? 0}
+                      </td>
+                      {dailyLogin.summaryByDayByGrade.map((g) => (
+                        <td key={g.grade} style={{ ...tdStyle, textAlign: "right" }}>
+                          {g.summaryByDay[i]?.activeStudents ?? 0} / {g.summaryByDay[i]?.totalStudents ?? 0}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p style={{ fontSize: 11, color: "#1a2d42", marginTop: 6 }}>
+                各セルは「その日に解答した人数 / 対象学年の登録人数」です。
+              </p>
+            </div>
+          )}
+          {dailyLogin.summaryByDayByGrade.length === 0 && (
+            <div style={{ overflowX: "auto", marginTop: 8 }}>
+              <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 520, fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: "#f5f5f5" }}>
+                    <th style={thStyle}>日付</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>ログイン学生数</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dailyLogin.summaryByDay.map((s) => (
+                    <tr key={s.date}>
+                      <td style={tdStyle}>{s.date}</td>
+                      <td style={{ ...tdStyle, textAlign: "right" }}>
+                        {s.activeStudents} / {s.totalStudents} 名
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {(dailyLoginLoadedMeta.grade
+            ? [{ grade: dailyLoginLoadedMeta.grade, students: dailyLogin.students }]
+            : dailyLogin.summaryByDayByGrade.map((g) => ({
+                grade: g.grade,
+                students: dailyLoginStudentsInGrade(dailyLogin.students, g.grade),
+              }))
+          ).map(({ grade, students }) =>
+            students.length === 0 ? null : (
+              <div key={grade} style={{ overflowX: "auto", marginTop: 16 }}>
+                <h3 style={{ fontSize: 15, margin: "0 0 8px", color: "#0b315b" }}>
+                  {grade}（{students.length} 名）
+                </h3>
+                <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 900, fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: "#f5f5f5" }}>
+                      <th style={thStyle}>学生</th>
+                      <th style={{ ...thStyle, textAlign: "right" }}>14日間のログイン日数</th>
+                      {dailyLogin.days.map((d) => (
+                        <th key={d} style={{ ...thStyle, textAlign: "center", whiteSpace: "nowrap" }}>
+                          {d.slice(5)}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {students.map((s) => (
+                      <tr key={s.userId}>
+                        <td style={tdStyle}>
+                          <div>{s.name ?? "(名前未設定)"}</div>
+                          <div style={{ color: "#1a2d42", fontSize: 12 }}>{s.email}</div>
+                        </td>
+                        <td style={{ ...tdStyle, textAlign: "right" }}>{s.activeDays} 日</td>
+                        {dailyLogin.days.map((d) => (
+                          <td key={d} style={{ ...tdStyle, textAlign: "center" }}>
+                            {s.activeByDay[d] ? "◯" : "-"}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          )}
+          {dailyLogin.students.length === 0 && (
+            <p style={{ fontSize: 13, color: "#1a2d42", marginTop: 12 }}>
+              この所属・学年に該当する受講生がいないか、直近14日に解答ログがありません。
+            </p>
+          )}
         </>
       )}
 
