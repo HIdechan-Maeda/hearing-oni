@@ -85,6 +85,7 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.leaderboard_affiliation(text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.leaderboard_affiliation(text) FROM anon;
 GRANT EXECUTE ON FUNCTION public.leaderboard_affiliation(text) TO authenticated;
 
 COMMENT ON FUNCTION public.leaderboard_affiliation IS

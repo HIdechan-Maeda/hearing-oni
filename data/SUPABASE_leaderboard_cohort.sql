@@ -132,6 +132,7 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.leaderboard_cohort(text, text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.leaderboard_cohort(text, text) FROM anon;
 GRANT EXECUTE ON FUNCTION public.leaderboard_cohort(text, text) TO authenticated;
 
 COMMENT ON FUNCTION public.leaderboard_cohort IS

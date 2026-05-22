@@ -8,6 +8,14 @@ ALTER TABLE public.questions_core_tags ENABLE ROW LEVEL SECURITY;
 GRANT SELECT ON public.questions_core_tags TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.questions_core_tags TO authenticated;
 
+-- 古い is_maehide() 用ポリシー（あれば削除）
+DROP POLICY IF EXISTS "tags_insert_only_maehide" ON public.questions_core_tags;
+DROP POLICY IF EXISTS "tags_update_only_maehide" ON public.questions_core_tags;
+DROP POLICY IF EXISTS "tags_delete_only_maehide" ON public.questions_core_tags;
+DROP POLICY IF EXISTS "questions_core_tags_insert_maehide" ON public.questions_core_tags;
+DROP POLICY IF EXISTS "questions_core_tags_update_maehide" ON public.questions_core_tags;
+DROP POLICY IF EXISTS "questions_core_tags_delete_maehide" ON public.questions_core_tags;
+
 DROP POLICY IF EXISTS "questions_core_tags_select_authenticated" ON public.questions_core_tags;
 DROP POLICY IF EXISTS "questions_core_tags_select_anon" ON public.questions_core_tags;
 DROP POLICY IF EXISTS "questions_core_tags_insert_authenticated" ON public.questions_core_tags;
