@@ -23,7 +23,10 @@ AS $$
   );
 $$;
 
+-- Supabase は関数作成時に anon / authenticated へ EXECUTE を付与することがある。
+-- PUBLIC のみ REVOKE では anon が残り、/rest/v1/rpc/is_teacher が未ログインで叩ける（リンター指摘）。
 REVOKE ALL ON FUNCTION public.is_teacher() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.is_teacher() FROM anon;
 GRANT EXECUTE ON FUNCTION public.is_teacher() TO authenticated;
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
