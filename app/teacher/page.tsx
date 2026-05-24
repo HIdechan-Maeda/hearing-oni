@@ -151,6 +151,14 @@ type DailyLoginResponse = {
 const LOGS_PAGE_SIZE = 1000;
 /** 無限ループ防止（この件数まで取得） */
 const MAX_LOG_ROWS_TO_SCAN = 10_000_000;
+/** logs の .in(user_id) 1 リクエストあたりの上限目安 */
+const LOGS_COHORT_IN_CHUNK = 80;
+
+function chunkIds(ids: string[], size: number): string[][] {
+  const out: string[][] = [];
+  for (let i = 0; i < ids.length; i += size) out.push(ids.slice(i, i + size));
+  return out;
+}
 const DAILY_LOGIN_GRADE_UNSET = "(学年未設定)";
 
 function dailyLoginStudentsInGrade(
@@ -167,6 +175,12 @@ export default function TeacherDashboardPage() {
   const [msg, setMsg] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [statsLoaded, setStatsLoaded] = useState(false);
+  const [statsAff, setStatsAff] = useState("");
+  const [statsAffOther, setStatsAffOther] = useState("");
+  const [statsGrade, setStatsGrade] = useState("");
+  const [statsLoadedMeta, setStatsLoadedMeta] = useState<{ affiliation: string; grade: string } | null>(
+    null
+  );
   const [teacherUserId, setTeacherUserId] = useState<string | null>(null);
   /** 集計したログ件数・人数（仕様の可視化） */
   const [aggregateMeta, setAggregateMeta] = useState<{
@@ -244,46 +258,77 @@ export default function TeacherDashboardPage() {
       return;
     }
     const me = { id: teacherUserId };
+    const effAff = statsAff === "その他" ? statsAffOther.trim() : statsAff.trim();
+    const effGrade = normalizeGradeFromDb(statsGrade.trim());
+    if (!effAff || !effGrade) {
+      setMsg("所属・学年を選択してください。「その他」の場合は所属名も入力してください。");
+      return;
+    }
 
     setLoading(true);
     setMsg("");
     setStatsLoaded(false);
+    setStatsLoadedMeta(null);
     setRows([]);
     setAggregateMeta(null);
 
-    // 全 logs をページング取得して集計（1 回だけ limit すると直近 N 件に「活発な少数ユーザー」が偏り、他の受講生が表に出ない。また API の行数上限で 1000 件などに切られることがある）
-    const statsByUser: Record<string, Record<DomainKey, DomainStat>> = {};
-    let totalLogRows = 0;
-    let offset = 0;
-    let truncated = false;
-    while (totalLogRows < MAX_LOG_ROWS_TO_SCAN) {
-      const { data: page, error: logsErr } = await supabase
-        .from("logs")
-        .select("user_id,is_correct,tags_raw")
-        .order("answered_at", { ascending: false })
-        .range(offset, offset + LOGS_PAGE_SIZE - 1);
+    const fullProf = await supabase
+      .from("profiles")
+      .select("user_id,email,name,affiliation,grade,role")
+      .eq("role", "student")
+      .eq("affiliation", effAff);
 
-      if (logsErr) {
-        setMsg("ログ取得エラー: " + logsErr.message);
-        setAggregateMeta(null);
+    let cohortProfiles: ProfileRowLite[] = [];
+    if (!fullProf.error && fullProf.data) {
+      cohortProfiles = (fullProf.data as ProfileRowLite[]).filter(
+        (p) => normalizeGradeFromDb(p.grade) === effGrade && p.user_id !== me.id
+      );
+    } else {
+      const minimal = await supabase.from("profiles").select("user_id,email,name,role").eq("role", "student");
+      if (minimal.error) {
+        setMsg(
+          "受講生プロフィール取得エラー: " +
+            minimal.error.message +
+            "\n\naffiliation / grade カラムがあるか、data/SUPABASE_profiles_affiliation_grade.sql を実行してください。"
+        );
         setStatsLoaded(true);
         setLoading(false);
         return;
       }
-      if (!page?.length) break;
+      setMsg(
+        "所属・学年で絞り込むには profiles の affiliation / grade 列が必要です。data/SUPABASE_profiles_affiliation_grade.sql を Supabase で実行してください。"
+      );
+      setStatsLoaded(true);
+      setLoading(false);
+      return;
+    }
 
-      for (const log of page as Array<{ user_id: string; is_correct: boolean; tags_raw: string | null }>) {
+    if (cohortProfiles.length === 0) {
+      setMsg("この所属・学年に該当する受講生がいません。プロフィールの所属・学年を確認してください。");
+      setStatsLoaded(true);
+      setLoading(false);
+      return;
+    }
+
+    const initStats = (): Record<DomainKey, DomainStat> => {
+      const s: Record<DomainKey, DomainStat> = {} as Record<DomainKey, DomainStat>;
+      for (const { key } of DOMAIN_OPTIONS) s[key] = { total: 0, correct: 0 };
+      return s;
+    };
+
+    const statsByUser: Record<string, Record<DomainKey, DomainStat>> = {};
+    for (const p of cohortProfiles) {
+      statsByUser[p.user_id] = initStats();
+    }
+
+    const cohortIds = cohortProfiles.map((p) => p.user_id);
+    let totalLogRows = 0;
+    let truncated = false;
+
+    const ingestLogPage = (page: Array<{ user_id: string; is_correct: boolean; tags_raw: string | null }>) => {
+      for (const log of page) {
         const uid = log.user_id;
-        if (!uid) continue;
-
-        if (!statsByUser[uid]) {
-          const initStats: Record<DomainKey, DomainStat> = {} as any;
-          for (const { key } of DOMAIN_OPTIONS) {
-            initStats[key] = { total: 0, correct: 0 };
-          }
-          statsByUser[uid] = initStats;
-        }
-
+        if (!uid || !statsByUser[uid]) continue;
         const isCorrect = !!log.is_correct;
         for (const { key } of DOMAIN_OPTIONS) {
           if (logTagsMatchDomainDetailed(log.tags_raw, key)) {
@@ -292,62 +337,56 @@ export default function TeacherDashboardPage() {
           }
         }
       }
-      totalLogRows += page.length;
-      if (totalLogRows >= MAX_LOG_ROWS_TO_SCAN) {
-        truncated = true;
-        break;
+    };
+
+    for (const idChunk of chunkIds(cohortIds, LOGS_COHORT_IN_CHUNK)) {
+      let offset = 0;
+      while (totalLogRows < MAX_LOG_ROWS_TO_SCAN) {
+        const { data: page, error: logsErr } = await supabase
+          .from("logs")
+          .select("user_id,is_correct,tags_raw")
+          .in("user_id", idChunk)
+          .order("answered_at", { ascending: false })
+          .range(offset, offset + LOGS_PAGE_SIZE - 1);
+
+        if (logsErr) {
+          setMsg("ログ取得エラー: " + logsErr.message);
+          setAggregateMeta(null);
+          setStatsLoaded(true);
+          setLoading(false);
+          return;
+        }
+        if (!page?.length) break;
+
+        ingestLogPage(page as Array<{ user_id: string; is_correct: boolean; tags_raw: string | null }>);
+        totalLogRows += page.length;
+        if (totalLogRows >= MAX_LOG_ROWS_TO_SCAN) {
+          truncated = true;
+          break;
+        }
+        if (page.length < LOGS_PAGE_SIZE) break;
+        offset += LOGS_PAGE_SIZE;
       }
-      if (page.length < LOGS_PAGE_SIZE) break;
-      offset += LOGS_PAGE_SIZE;
+      if (truncated) break;
     }
 
-    if (totalLogRows === 0) {
-      setRows([]);
-      setAggregateMeta(null);
-      setStatsLoaded(true);
-      setLoading(false);
-      return;
-    }
+    const resultRows: UserRow[] = cohortProfiles.map((p) => ({
+      userId: p.user_id,
+      name: p.name,
+      email: p.email,
+      affiliation: p.affiliation ?? effAff,
+      grade: normalizeGradeFromDb(p.grade) || effGrade,
+      stats: statsByUser[p.user_id],
+    }));
 
-    const userIds = Object.keys(statsByUser);
-
-    const { profiles: profileList, error: batchErr } = await fetchProfilesBatch(userIds);
-    if (batchErr) {
-      setMsg(
-        "受講生プロフィール取得エラー: " +
-          batchErr +
-          "\n\n※ ログに出ている user が非常に多い場合は、.in() の件数制限で失敗することがあります（バッチ取得に変更済み）。affiliation / grade カラムが無い場合は name のみで取得します。"
-      );
-      setAggregateMeta(null);
-      setStatsLoaded(true);
-      setLoading(false);
-      return;
-    }
-
-    const profileMap = new Map<string, ProfileRowLite>();
-    for (const p of profileList) {
-      profileMap.set(p.user_id, p);
-    }
-
-    const resultRows: UserRow[] = Object.entries(statsByUser)
-      // 教師自身のログは除外
-      .filter(([uid]) => uid !== me.id)
-      .map(([uid, stats]) => {
-        const prof = profileMap.get(uid);
-        return {
-          userId: uid,
-          name: prof?.name ?? null,
-          email: prof?.email ?? "(email不明)",
-          affiliation: prof?.affiliation ?? null,
-          grade: prof?.grade ?? null,
-          stats,
-        };
-      });
-
-    // 表示を安定させるためメールでソート
     resultRows.sort((a, b) => a.email.localeCompare(b.email));
 
-    setAggregateMeta({ logRows: totalLogRows, studentCount: resultRows.length, truncated });
+    setStatsLoadedMeta({ affiliation: effAff, grade: effGrade });
+    setAggregateMeta({
+      logRows: totalLogRows,
+      studentCount: resultRows.length,
+      truncated,
+    });
     setRows(resultRows);
     setStatsLoaded(true);
     setLoading(false);
@@ -532,10 +571,53 @@ export default function TeacherDashboardPage() {
         <Link href="/teacher/questions-generate">OpenAI 問題生成</Link>
       </p>
       <p style={{ fontSize: 12, color: "#1a2d42", marginTop: 8, lineHeight: 1.55, maxWidth: 720 }}>
-        解答ログを<strong>全件</strong>（ページ分割）集計し、ログが 1 件以上ある受講生を一覧表示します。以前は直近のみの取得で人数が少なく見えることがありました。
-        負荷軽減のため、表示はボタン押下時のみ実行します（ログ件数が多いと 1 分近くかかることがあります）。
+        選択した<strong>所属・学年</strong>の受講生について、解答ログをページ分割で集計し、領域別の正答率を表示します。
+        ログが無い受講生も 0 件として一覧に含めます。表示はボタン押下時のみ（ログ件数が多いと時間がかかることがあります）。
       </p>
-      <p style={{ marginTop: 8 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginTop: 8, marginBottom: 8 }}>
+        <div>
+          <div style={{ fontSize: 12, marginBottom: 4, fontWeight: 600, color: "#0b315b" }}>所属</div>
+          <select
+            className="input-elegant"
+            value={statsAff}
+            onChange={(e) => {
+              setStatsAff(e.target.value);
+              if (e.target.value !== "その他") setStatsAffOther("");
+            }}
+            style={{ minWidth: 180 }}
+          >
+            <option value="">選択</option>
+            {AFFILIATION_PRESETS.map((a) => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+        </div>
+        {statsAff === "その他" && (
+          <div>
+            <div style={{ fontSize: 12, marginBottom: 4, fontWeight: 600, color: "#0b315b" }}>所属（記入）</div>
+            <input
+              className="input-elegant"
+              value={statsAffOther}
+              onChange={(e) => setStatsAffOther(e.target.value)}
+              placeholder="所属名"
+              style={{ width: 200 }}
+            />
+          </div>
+        )}
+        <div>
+          <div style={{ fontSize: 12, marginBottom: 4, fontWeight: 600, color: "#0b315b" }}>学年</div>
+          <select
+            className="input-elegant"
+            value={statsGrade}
+            onChange={(e) => setStatsGrade(e.target.value)}
+            style={{ minWidth: 100 }}
+          >
+            <option value="">選択</option>
+            {GRADE_OPTIONS.map((g) => (
+              <option key={g} value={g}>{g}</option>
+            ))}
+          </select>
+        </div>
         <button
           type="button"
           onClick={loadDomainStats}
@@ -544,15 +626,17 @@ export default function TeacherDashboardPage() {
         >
           {loading ? "集計中..." : statsLoaded ? "領域別正答率を再表示" : "領域別正答率を表示"}
         </button>
-      </p>
+      </div>
 
       {msg && <p style={{ color: "#b00", whiteSpace: "pre-wrap" }}>{msg}</p>}
 
       {loading && <p>読み込み中…（ログ件数が多いと 1 分近くかかることがあります）</p>}
 
-      {!loading && hasData && aggregateMeta && (
+      {!loading && statsLoaded && statsLoadedMeta && aggregateMeta && (
         <p style={{ fontSize: 13, color: "#0b315b", marginTop: 8, marginBottom: 0 }}>
-          集計した解答ログ: <strong>{aggregateMeta.logRows.toLocaleString("ja-JP")}</strong> 件 ／ 表示中の受講生:{" "}
+          対象: <strong>{statsLoadedMeta.affiliation}</strong> ／ <strong>{statsLoadedMeta.grade}</strong>
+          {" ・ "}
+          集計した解答ログ: <strong>{aggregateMeta.logRows.toLocaleString("ja-JP")}</strong> 件 ／ 受講生:{" "}
           <strong>{aggregateMeta.studentCount}</strong> 名
           {aggregateMeta.truncated ? (
             <span style={{ color: "#a50" }}>（集計件数の上限に達したため、それより古いログは含まれていません）</span>
@@ -610,7 +694,11 @@ export default function TeacherDashboardPage() {
         </div>
       )}
 
-      {statsLoaded && !loading && !hasData && !msg && <p>まだログがありません。</p>}
+      {statsLoaded && !loading && !hasData && !msg && statsLoadedMeta && (
+        <p style={{ fontSize: 13, color: "#1a2d42" }}>
+          {statsLoadedMeta.affiliation} ／ {statsLoadedMeta.grade} に該当する受講生はいますが、まだ解答ログがありません。
+        </p>
+      )}
 
       <hr style={{ margin: "28px 0" }} />
       <h2 style={{ fontSize: 18, marginBottom: 8 }}>学生の日別ログイン状況（直近14日）</h2>
