@@ -89,9 +89,11 @@ git push origin main
 
 | ファイル | 内容 |
 |----------|------|
-| `data/SUPABASE_RLS_profiles.sql` | profiles の RLS（未実行なら先に） |
+| `data/SUPABASE_fix_is_teacher_private_schema.sql` | 教師判定を private スキーマへ（Linter 0029 対応） |
+| `data/SUPABASE_RLS_profiles.sql` | profiles の RLS（上の後に） |
 | `data/SUPABASE_profiles_protect_role.sql` | `role` の自己昇格防止 |
 | `data/SUPABASE_RLS_questions_core.sql` | 問題はログイン必須 |
+| `data/SUPABASE_fix_leaderboard_security_invoker.sql` | ランキング RPC の Linter 0029 対応 |
 
 Vercel に **`SUPABASE_SERVICE_ROLE_KEY`** が無いと新規登録 API が動きません（`.env.example` 参照）。
 

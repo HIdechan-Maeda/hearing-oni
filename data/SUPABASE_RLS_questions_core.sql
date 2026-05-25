@@ -1,5 +1,5 @@
 -- public.questions_core の RLS（Supabase SQL Editor で実行）
--- 前提: public.is_teacher() が存在すること（data/SUPABASE_RLS_profiles.sql）
+-- 前提: private.is_teacher()（data/SUPABASE_fix_is_teacher_private_schema.sql）
 --
 -- 受講生: ログイン済み（authenticated）のみ SELECT（未ログイン anon は不可）
 -- 教師: INSERT / UPDATE / DELETE（Table Editor やクライアント直書き用）
@@ -30,12 +30,12 @@ CREATE POLICY "questions_core_select_authenticated"
 
 CREATE POLICY "questions_core_insert_teacher"
   ON public.questions_core FOR INSERT TO authenticated
-  WITH CHECK (public.is_teacher());
+  WITH CHECK ((SELECT private.is_teacher()));
 
 CREATE POLICY "questions_core_update_teacher"
   ON public.questions_core FOR UPDATE TO authenticated
-  USING (public.is_teacher()) WITH CHECK (public.is_teacher());
+  USING ((SELECT private.is_teacher())) WITH CHECK ((SELECT private.is_teacher()));
 
 CREATE POLICY "questions_core_delete_teacher"
   ON public.questions_core FOR DELETE TO authenticated
-  USING (public.is_teacher());
+  USING ((SELECT private.is_teacher()));

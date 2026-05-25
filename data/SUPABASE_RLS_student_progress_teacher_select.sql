@@ -4,4 +4,4 @@ CREATE POLICY "student_progress_select_teacher"
   ON public.student_progress
   FOR SELECT
   TO authenticated
-  USING (public.is_teacher());
+  USING ((SELECT private.is_teacher()));

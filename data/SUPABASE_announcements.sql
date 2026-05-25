@@ -1,5 +1,5 @@
 -- ホーム上部のお知らせ（公開中・日時到達済みのうち新しい順に最大2件。履歴は行として残す）
--- 前提: public.is_teacher() が存在すること（data/SUPABASE_RLS_profiles.sql）
+-- 前提: private.is_teacher()（data/SUPABASE_fix_is_teacher_private_schema.sql）
 
 CREATE TABLE IF NOT EXISTS public.announcements (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -40,7 +40,7 @@ CREATE POLICY "announcements_select_authenticated"
 ON public.announcements FOR SELECT
 TO authenticated
 USING (
-  public.is_teacher()
+  (SELECT private.is_teacher())
   OR (
     is_active = true
     AND published_at <= now()
@@ -49,13 +49,13 @@ USING (
 
 CREATE POLICY "announcements_teacher_insert"
 ON public.announcements FOR INSERT TO authenticated
-WITH CHECK (public.is_teacher());
+WITH CHECK ((SELECT private.is_teacher()));
 
 CREATE POLICY "announcements_teacher_update"
 ON public.announcements FOR UPDATE TO authenticated
-USING (public.is_teacher())
-WITH CHECK (public.is_teacher());
+USING ((SELECT private.is_teacher()))
+WITH CHECK ((SELECT private.is_teacher()));
 
 CREATE POLICY "announcements_teacher_delete"
 ON public.announcements FOR DELETE TO authenticated
-USING (public.is_teacher());
+USING ((SELECT private.is_teacher()));

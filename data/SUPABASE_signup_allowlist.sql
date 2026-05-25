@@ -1,7 +1,7 @@
 -- 学外メールの新規登録許可リスト（Supabase SQL Editor で実行）
 -- アプリは Route Handler が service_role で照会。教師は Dashboard から追加。
 --
--- 前提: public.is_teacher() が存在すること（data/SUPABASE_RLS_profiles.sql）
+-- 前提: private.is_teacher() が存在すること（data/SUPABASE_fix_is_teacher_private_schema.sql）
 
 CREATE TABLE IF NOT EXISTS public.signup_allowlist (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -24,17 +24,17 @@ DROP POLICY IF EXISTS "signup_allowlist_teacher_delete" ON public.signup_allowli
 
 CREATE POLICY "signup_allowlist_teacher_select"
 ON public.signup_allowlist FOR SELECT TO authenticated
-USING (public.is_teacher());
+USING ((SELECT private.is_teacher()));
 
 CREATE POLICY "signup_allowlist_teacher_insert"
 ON public.signup_allowlist FOR INSERT TO authenticated
-WITH CHECK (public.is_teacher());
+WITH CHECK ((SELECT private.is_teacher()));
 
 CREATE POLICY "signup_allowlist_teacher_update"
 ON public.signup_allowlist FOR UPDATE TO authenticated
-USING (public.is_teacher())
-WITH CHECK (public.is_teacher());
+USING ((SELECT private.is_teacher()))
+WITH CHECK ((SELECT private.is_teacher()));
 
 CREATE POLICY "signup_allowlist_teacher_delete"
 ON public.signup_allowlist FOR DELETE TO authenticated
-USING (public.is_teacher());
+USING ((SELECT private.is_teacher()));

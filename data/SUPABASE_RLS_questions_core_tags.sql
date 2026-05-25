@@ -1,6 +1,6 @@
 -- public.questions_core_tags に RLS を有効にする
 -- Supabase のセキュリティ警告対応。SQL Editor でこのファイルの内容を実行してください。
--- 前提: public.is_teacher() が存在すること（data/SUPABASE_RLS_profiles.sql）
+-- 前提: private.is_teacher()（data/SUPABASE_fix_is_teacher_private_schema.sql）
 --
 -- 読み取り: ログイン済み（authenticated）のみ。未ログイン anon は不可。
 
@@ -28,10 +28,10 @@ CREATE POLICY "questions_core_tags_select_authenticated"
   ON public.questions_core_tags FOR SELECT TO authenticated USING (true);
 
 CREATE POLICY "questions_core_tags_insert_authenticated"
-  ON public.questions_core_tags FOR INSERT TO authenticated WITH CHECK (public.is_teacher());
+  ON public.questions_core_tags FOR INSERT TO authenticated WITH CHECK ((SELECT private.is_teacher()));
 
 CREATE POLICY "questions_core_tags_update_authenticated"
-  ON public.questions_core_tags FOR UPDATE TO authenticated USING (public.is_teacher()) WITH CHECK (public.is_teacher());
+  ON public.questions_core_tags FOR UPDATE TO authenticated USING ((SELECT private.is_teacher())) WITH CHECK ((SELECT private.is_teacher()));
 
 CREATE POLICY "questions_core_tags_delete_authenticated"
-  ON public.questions_core_tags FOR DELETE TO authenticated USING (public.is_teacher());
+  ON public.questions_core_tags FOR DELETE TO authenticated USING ((SELECT private.is_teacher()));
