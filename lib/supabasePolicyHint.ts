@@ -39,9 +39,12 @@ export function supabaseLeaderboardRpcHint(message: string): string {
     s +=
       " SQL Editor で data/SUPABASE_leaderboard_cohort.sql（および所属全体用なら data/SUPABASE_leaderboard_affiliation.sql）を実行し、必要なら Dashboard → Settings → API でスキーマを再読み込みしてください。";
   }
-  if (/row-level security|permission denied|42501|relation\s+\"logs\"|table\s+logs/i.test(message)) {
+  if (/permission denied for function\s+(leaderboard_cohort|leaderboard_affiliation)/i.test(message)) {
     s +=
-      " 同じ SQL を再実行し、関数内の set_config('row_security','off') が入っているか確認してください（logs の RLS で失敗することがあります）。";
+      " Supabase SQL Editor で data/SUPABASE_fix_leaderboard_grants.sql を実行し、authenticated に EXECUTE を付け直してください（anon には付与しない）。";
+  } else if (/row-level security|permission denied|42501|relation\s+\"logs\"|table\s+logs/i.test(message)) {
+    s +=
+      " 同じ SQL を再実行し、関数内の set_config('row_security','off') が入っているか確認してください（logs の RLS で失敗することがあります）。権限エラーの場合は data/SUPABASE_fix_leaderboard_grants.sql も実行してください。";
   }
   return s;
 }

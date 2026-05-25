@@ -131,6 +131,7 @@ BEGIN
 END;
 $$;
 
+-- anon のみ REVOKE。authenticated は学生・教師の RPC に必須（外すとランキング 42501）
 REVOKE ALL ON FUNCTION public.leaderboard_cohort(text, text) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.leaderboard_cohort(text, text) FROM anon;
 GRANT EXECUTE ON FUNCTION public.leaderboard_cohort(text, text) TO authenticated;
