@@ -17,7 +17,6 @@ import { isEmailUniversityDomain, normalizeSignupEmail } from "../lib/allowedSig
 import {
   EMAIL_RATE_LIMIT_MESSAGE,
   formatLoginErrorMessage,
-  formatSignupErrorMessage,
   isEmailRateLimitError,
 } from "../lib/formatAuthLoginError";
 import { formatSupabaseError, supabaseProfileErrorHints } from "../lib/supabasePolicyHint";
@@ -448,15 +447,56 @@ export default function HomePage() {
     }
 
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const { error } = await supabase.auth.signUp({
-      email: normalizedEmail,
-      password,
-      options: origin ? { emailRedirectTo: `${origin}/` } : undefined,
-    });
-    if (error) {
-      setMsg(formatSignupErrorMessage(error));
-    } else {
+    try {
+      const res = await fetch("/api/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: normalizedEmail,
+          password,
+          redirectTo: origin ? `${origin}/` : undefined,
+        }),
+      });
+      const j = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        message?: string;
+        hint?: string;
+        warning?: string;
+      };
+      if (res.status === 503 || j.error === "server_misconfigured") {
+        setMsg(
+          j.hint ??
+            "登録処理を開始できませんでした（サーバー設定）。管理者に SUPABASE_SERVICE_ROLE_KEY の設定を依頼してください。"
+        );
+        return;
+      }
+      if (j.error === "lookup_failed") {
+        setMsg(
+          "登録可否の確認中にエラーが発生しました（許可リストの参照）。しばらくしてから再度お試しください。繰り返す場合は担当教員に連絡してください。"
+        );
+        return;
+      }
+      if (j.error === "not_allowed") {
+        setMsg(
+          "新規登録は学内メール（@hoku-iryo-u.ac.jp）、または管理者が許可したメールアドレスのみ利用できます。学外メールの方は担当教員に依頼し、許可後に再度お試しください。"
+        );
+        return;
+      }
+      if (!j.ok) {
+        setMsg(j.message ?? "新規登録に失敗しました。通信環境を確認してください。");
+        return;
+      }
+      if (j.warning === "confirmation_email_maybe_failed") {
+        setLoginInfoMsg(
+          j.message ??
+            "アカウントは作成されましたが、確認メールの送信に失敗した可能性があります。「確認メール再送」を試してください。"
+        );
+        return;
+      }
       setLoginInfoMsg("仮登録しました。届いたメール内のリンクで本登録を完了してから、ログインしてください。");
+    } catch {
+      setMsg("新規登録に失敗しました。通信環境を確認してください。");
     }
   };
 

@@ -82,7 +82,20 @@ git push origin main
 
 - **URL**: Vercel の URL（例: `https://hearing-oni.vercel.app`）だけを共有
 - **使い方**: 「このURLにアクセス → メール/パスワードでサインアップ or ログイン → 基本修行 or 鬼問題モードで自習」
-- アカウントは Supabase Authentication で作成されます。必要なら Supabase の **Authentication → Settings** で「メールドメイン制限」などを検討してください。
+- アカウントは **サーバー API（`/api/signup`）** 経由で作成されます（学内メール or 許可リスト以外は登録不可）。
+- 教師権限は Supabase の **Table Editor** または SQL で `profiles.role = 'teacher'` を手動設定してください（学生が自分で昇格できないよう `data/SUPABASE_profiles_protect_role.sql` を実行）。
+
+### Supabase で実行する SQL（セキュリティ）
+
+| ファイル | 内容 |
+|----------|------|
+| `data/SUPABASE_RLS_profiles.sql` | profiles の RLS（未実行なら先に） |
+| `data/SUPABASE_profiles_protect_role.sql` | `role` の自己昇格防止 |
+| `data/SUPABASE_RLS_questions_core.sql` | 問題はログイン必須 |
+
+Vercel に **`SUPABASE_SERVICE_ROLE_KEY`** が無いと新規登録 API が動きません（`.env.example` 参照）。
+
+**推奨（登録迂回の完全防止）:** Supabase Dashboard → **Authentication** → **Sign In / Providers** → Email で、クライアントからの新規登録（Sign ups）を **無効** にする。登録はアプリの `/api/signup`（service_role）のみが行います。
 
 ---
 
@@ -98,7 +111,9 @@ git push origin main
 | 現象 | 確認すること |
 |------|----------------|
 | ログインできない | Supabase の Authentication で「Email」が有効か。Vercel の環境変数が正しいか。 |
-| 問題が0件 | Supabase の `questions_core` にデータがあるか。RLS で SELECT が許可されているか。 |
+| 問題が0件 | Supabase の `questions_core` にデータがあるか。**ログイン後**に RLS で SELECT が許可されているか（`data/SUPABASE_RLS_questions_core.sql` を実行済みか。未ログイン anon では読めません）。 |
 | 教師ダッシュボードが開けない | `profiles.role = 'teacher'` と RLS の「講師は全件読める」ポリシーが正しく設定されているか。 |
+| 新規登録できない | Vercel の `SUPABASE_SERVICE_ROLE_KEY`。学内メール or `signup_allowlist` にメールがあるか。 |
+| 確認メールが届かない | Supabase Authentication のメール確認設定。ホームの「確認メール再送」を試す。 |
 
 環境変数を変えたあとは、Vercel の **Deployments** から **Redeploy** すると反映されます。

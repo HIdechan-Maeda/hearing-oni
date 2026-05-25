@@ -74,3 +74,5 @@ FOR UPDATE
 TO authenticated
 USING (user_id = auth.uid())
 WITH CHECK (user_id = auth.uid());
+
+-- role の自己昇格防止: data/SUPABASE_profiles_protect_role.sql を別途実行すること

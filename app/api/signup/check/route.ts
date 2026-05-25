@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
-import { createSupabaseAdmin } from "@/lib/supabaseAdmin";
-import {
-  isEmailUniversityDomain,
-  normalizeSignupEmail,
-  legacyRoninEmailAllowed,
-} from "@/lib/allowedSignUpEmails";
+import { normalizeSignupEmail } from "@/lib/allowedSignUpEmails";
+import { checkSignupEmailAllowed } from "@/lib/signupAllowed";
 
 export const runtime = "nodejs";
 
@@ -24,16 +20,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ allowed: false }, { status: 200 });
   }
 
-  if (isEmailUniversityDomain(email)) {
-    return NextResponse.json({ allowed: true, source: "university" });
-  }
+  const result = await checkSignupEmailAllowed(email);
 
-  if (legacyRoninEmailAllowed(email)) {
-    return NextResponse.json({ allowed: true, source: "legacy_env" });
-  }
-
-  const admin = createSupabaseAdmin();
-  if (!admin) {
+  if (result.error === "server_misconfigured") {
     return NextResponse.json(
       {
         allowed: false,
@@ -44,12 +33,12 @@ export async function POST(req: Request) {
     );
   }
 
-  const { data, error } = await admin.from("signup_allowlist").select("id").eq("email", email).maybeSingle();
-
-  if (error) {
-    console.error("[signup/check]", error.message);
+  if (result.error === "lookup_failed") {
     return NextResponse.json({ allowed: false, error: "lookup_failed" }, { status: 200 });
   }
 
-  return NextResponse.json({ allowed: !!data, source: data ? "allowlist" : "none" });
+  return NextResponse.json({
+    allowed: result.allowed,
+    source: result.allowed ? result.source : "none",
+  });
 }

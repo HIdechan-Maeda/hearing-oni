@@ -1,11 +1,13 @@
 -- public.questions_core_tags に RLS を有効にする
 -- Supabase のセキュリティ警告対応。SQL Editor でこのファイルの内容を実行してください。
 -- 前提: public.is_teacher() が存在すること（data/SUPABASE_RLS_profiles.sql）
+--
+-- 読み取り: ログイン済み（authenticated）のみ。未ログイン anon は不可。
 
--- 1. RLS を有効化（必須）
 ALTER TABLE public.questions_core_tags ENABLE ROW LEVEL SECURITY;
 
-GRANT SELECT ON public.questions_core_tags TO anon;
+REVOKE SELECT ON public.questions_core_tags FROM anon;
+
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.questions_core_tags TO authenticated;
 
 -- 古い is_maehide() 用ポリシー（あれば削除）
@@ -22,14 +24,9 @@ DROP POLICY IF EXISTS "questions_core_tags_insert_authenticated" ON public.quest
 DROP POLICY IF EXISTS "questions_core_tags_update_authenticated" ON public.questions_core_tags;
 DROP POLICY IF EXISTS "questions_core_tags_delete_authenticated" ON public.questions_core_tags;
 
--- 2. 読み取りポリシー（認証済み・匿名の両方で SELECT 可能）
 CREATE POLICY "questions_core_tags_select_authenticated"
   ON public.questions_core_tags FOR SELECT TO authenticated USING (true);
 
-CREATE POLICY "questions_core_tags_select_anon"
-  ON public.questions_core_tags FOR SELECT TO anon USING (true);
-
--- 3. 書き込みは教師のみ（認証済み全員に開くとRLS警告対象になる）
 CREATE POLICY "questions_core_tags_insert_authenticated"
   ON public.questions_core_tags FOR INSERT TO authenticated WITH CHECK (public.is_teacher());
 

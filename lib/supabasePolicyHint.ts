@@ -29,7 +29,11 @@ export function supabaseSchemaHint(message: string): string {
 }
 
 export function supabaseProfileErrorHints(message: string): string {
-  return supabaseRlsHint(message) + supabaseSchemaHint(message);
+  let s = supabaseRlsHint(message) + supabaseSchemaHint(message);
+  if (/profiles\.role cannot|cannot be changed by users|cannot be set to teacher/i.test(message)) {
+    s += " 教師権限（role）は管理者のみ付与できます。担当教員に連絡してください。";
+  }
+  return s;
 }
 
 /** leaderboard_cohort RPC 失敗時（関数未作成・RLS・スキーマキャッシュ） */
