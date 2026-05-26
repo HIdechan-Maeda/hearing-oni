@@ -23,7 +23,8 @@ function mapRows(data: unknown): LeaderboardRpcRow[] {
 }
 
 /**
- * service_role で private.leaderboard_* を実行（REST RPC 非公開）。
+ * service_role で public.leaderboard_* を実行。
+ * authenticated には EXECUTE なし（/api/leaderboard 経由のみ）。
  */
 export async function fetchLeaderboardCohortForUser(
   callerUserId: string,
@@ -34,7 +35,7 @@ export async function fetchLeaderboardCohortForUser(
     return { rows: [], error: "server_misconfigured" };
   }
 
-  const { data, error } = await admin.schema("private").rpc("leaderboard_cohort", {
+  const { data, error } = await admin.rpc("leaderboard_cohort", {
     p_caller_user_id: callerUserId,
     p_affiliation: opts.p_affiliation,
     p_grade: opts.p_grade,
@@ -56,7 +57,7 @@ export async function fetchLeaderboardAffiliationForUser(
     return { rows: [], error: "server_misconfigured" };
   }
 
-  const { data, error } = await admin.schema("private").rpc("leaderboard_affiliation", {
+  const { data, error } = await admin.rpc("leaderboard_affiliation", {
     p_caller_user_id: callerUserId,
     p_affiliation: opts.p_affiliation,
   });

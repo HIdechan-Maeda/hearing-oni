@@ -41,7 +41,7 @@ export function supabaseLeaderboardRpcHint(message: string): string {
   let s = "";
   if (/function|does not exist|PGRST202|schema cache|42883|leaderboard_failed/i.test(message)) {
     s +=
-      " Supabase SQL Editor で data/SUPABASE_leaderboard_private_schema.sql を実行してください。Vercel に SUPABASE_SERVICE_ROLE_KEY があるかも確認してください。";
+      " Supabase SQL Editor で data/SUPABASE_fix_leaderboard_svc_rpc.sql（未実行なら data/SUPABASE_leaderboard_private_schema.sql も）を実行してください。Vercel に SUPABASE_SERVICE_ROLE_KEY があるかも確認してください。";
   }
   if (/server_misconfigured|503/i.test(message)) {
     s += " Vercel の Environment Variables に SUPABASE_SERVICE_ROLE_KEY を設定し、再デプロイしてください。";
