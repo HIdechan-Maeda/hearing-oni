@@ -8,7 +8,7 @@ import {
 export type SignupAllowSource = "university" | "legacy_env" | "allowlist" | "none";
 
 export type SignupAllowResult =
-  | { allowed: true; source: SignupAllowSource }
+  | { allowed: true; source: SignupAllowSource; error?: undefined }
   | { allowed: false; source: SignupAllowSource; error?: "server_misconfigured" | "lookup_failed" };
 
 /**
