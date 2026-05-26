@@ -1,9 +1,5 @@
--- ランキング API 修復: Invalid schema: private 対策
--- 集計本体は private（DEFINER）。アプリは public RPC を service_role のみ実行。
--- private スキーマ SQL 実行済みの環境でこのファイルを Run。
--- 未実行なら data/SUPABASE_leaderboard_private_schema.sql を先に全文実行。
+-- Supabase SQL Editor: このファイルを開き Cmd+A でコピーして Run（チャットから貼らない）
 
--- 旧シグネチャ（auth.uid 版）が残っていれば削除
 DROP FUNCTION IF EXISTS public.leaderboard_cohort(text, text);
 DROP FUNCTION IF EXISTS public.leaderboard_affiliation(text);
 
