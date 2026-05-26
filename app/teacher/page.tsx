@@ -15,6 +15,7 @@ import {
   signOutLocalIfRefreshTokenInvalid,
 } from "../../lib/supabaseInvalidSession";
 import { downloadCsv, rowsToCsv, sanitizeFilenamePart } from "../../lib/csvExport";
+import { fetchLeaderboardCohort } from "../../lib/leaderboardCohort";
 
 type DomainKey =
   | "anatomy"
@@ -479,7 +480,7 @@ export default function TeacherDashboardPage() {
     }
     setRankLoading(true);
     setRankLoadedMeta(null);
-    const { data, error } = await supabase.rpc("leaderboard_cohort", {
+    const { rows: list, error } = await fetchLeaderboardCohort(supabase, {
       p_affiliation: effAff,
       p_grade: effGrade,
     });
@@ -494,14 +495,6 @@ export default function TeacherDashboardPage() {
       setRankLoadedMeta(null);
       return;
     }
-    const list = (data ?? []) as Array<{
-      rank: number;
-      user_id: string;
-      display_name: string;
-      total_answered: number;
-      total_correct: number;
-      accuracy_pct: number;
-    }>;
     const { profiles: rankProfiles, error: profErr } = await fetchProfilesBatch(
       list.map((r) => r.user_id)
     );

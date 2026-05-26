@@ -2,7 +2,7 @@
 -- 学生は自分の所属に一致する全受講生（学年は問わない）。教師は p_affiliation で指定。
 -- Supabase SQL Editor で実行後、学生は /ranking の「所属・全学年」タブから利用
 --
--- leaderboard_cohort と同様 SECURITY INVOKER + row_security off で logs を集計
+-- leaderboard_cohort と同様 SECURITY DEFINER + row_security off で logs を集計
 
 CREATE OR REPLACE FUNCTION public.leaderboard_affiliation(
   p_affiliation text DEFAULT NULL
@@ -16,7 +16,7 @@ RETURNS TABLE (
   accuracy_pct numeric
 )
 LANGUAGE plpgsql
-SECURITY INVOKER
+SECURITY DEFINER
 SET search_path = public
 AS $$
 #variable_conflict use_column

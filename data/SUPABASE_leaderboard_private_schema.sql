@@ -1,7 +1,12 @@
--- 非推奨: INVOKER だとランキングが RLS 42501 で失敗することがある
--- 代わりに data/SUPABASE_fix_leaderboard_restore_definer.sql を実行すること
+-- ランキングを private スキーマへ移行（Linter 0029 根本対応）
+-- アプリは /api/leaderboard/* 経由（service_role）のみ呼ぶ
+-- 前提: public.normalize_grade_for_cohort が存在（SUPABASE_leaderboard_cohort.sql）
+-- 1行目から末尾までコピーして Run
 
-CREATE OR REPLACE FUNCTION public.leaderboard_cohort(
+CREATE SCHEMA IF NOT EXISTS private;
+
+CREATE OR REPLACE FUNCTION private.leaderboard_cohort(
+  p_caller_user_id uuid,
   p_affiliation text DEFAULT NULL,
   p_grade text DEFAULT NULL
 )
@@ -14,7 +19,7 @@ RETURNS TABLE (
   accuracy_pct numeric
 )
 LANGUAGE plpgsql
-SECURITY INVOKER
+SECURITY DEFINER
 SET search_path = public
 AS $$
 #variable_conflict use_column
@@ -23,12 +28,16 @@ DECLARE
   v_grade text;
   v_is_teacher boolean := false;
 BEGIN
+  IF p_caller_user_id IS NULL THEN
+    RETURN;
+  END IF;
+
   PERFORM set_config('row_security', 'off', true);
 
   SELECT EXISTS (
     SELECT 1
     FROM public.profiles pf
-    WHERE pf.user_id = auth.uid()
+    WHERE pf.user_id = p_caller_user_id
       AND lower(trim(coalesce(pf.role, ''))) = 'teacher'
   )
   INTO v_is_teacher;
@@ -42,7 +51,7 @@ BEGIN
       public.normalize_grade_for_cohort(pf.grade)
     INTO v_aff, v_grade
     FROM public.profiles pf
-    WHERE pf.user_id = auth.uid();
+    WHERE pf.user_id = p_caller_user_id;
   END IF;
 
   IF v_aff IS NULL OR v_grade IS NULL THEN
@@ -87,7 +96,8 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.leaderboard_affiliation(
+CREATE OR REPLACE FUNCTION private.leaderboard_affiliation(
+  p_caller_user_id uuid,
   p_affiliation text DEFAULT NULL
 )
 RETURNS TABLE (
@@ -99,7 +109,7 @@ RETURNS TABLE (
   accuracy_pct numeric
 )
 LANGUAGE plpgsql
-SECURITY INVOKER
+SECURITY DEFINER
 SET search_path = public
 AS $$
 #variable_conflict use_column
@@ -107,12 +117,16 @@ DECLARE
   v_aff text;
   v_is_teacher boolean := false;
 BEGIN
+  IF p_caller_user_id IS NULL THEN
+    RETURN;
+  END IF;
+
   PERFORM set_config('row_security', 'off', true);
 
   SELECT EXISTS (
     SELECT 1
     FROM public.profiles pf
-    WHERE pf.user_id = auth.uid()
+    WHERE pf.user_id = p_caller_user_id
       AND lower(trim(coalesce(pf.role, ''))) = 'teacher'
   )
   INTO v_is_teacher;
@@ -123,7 +137,7 @@ BEGIN
     SELECT NULLIF(trim(COALESCE(pf.affiliation, '')), '')
     INTO v_aff
     FROM public.profiles pf
-    WHERE pf.user_id = auth.uid();
+    WHERE pf.user_id = p_caller_user_id;
   END IF;
 
   IF v_aff IS NULL THEN
@@ -167,10 +181,16 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.leaderboard_cohort(text, text) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.leaderboard_cohort(text, text) FROM anon;
-GRANT EXECUTE ON FUNCTION public.leaderboard_cohort(text, text) TO authenticated;
+REVOKE ALL ON FUNCTION private.leaderboard_cohort(uuid, text, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION private.leaderboard_affiliation(uuid, text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION private.leaderboard_cohort(uuid, text, text) FROM anon;
+REVOKE EXECUTE ON FUNCTION private.leaderboard_affiliation(uuid, text) FROM anon;
+REVOKE EXECUTE ON FUNCTION private.leaderboard_cohort(uuid, text, text) FROM authenticated;
+REVOKE EXECUTE ON FUNCTION private.leaderboard_affiliation(uuid, text) FROM authenticated;
 
-REVOKE ALL ON FUNCTION public.leaderboard_affiliation(text) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.leaderboard_affiliation(text) FROM anon;
-GRANT EXECUTE ON FUNCTION public.leaderboard_affiliation(text) TO authenticated;
+GRANT USAGE ON SCHEMA private TO service_role;
+GRANT EXECUTE ON FUNCTION private.leaderboard_cohort(uuid, text, text) TO service_role;
+GRANT EXECUTE ON FUNCTION private.leaderboard_affiliation(uuid, text) TO service_role;
+
+DROP FUNCTION IF EXISTS public.leaderboard_cohort(text, text);
+DROP FUNCTION IF EXISTS public.leaderboard_affiliation(text);

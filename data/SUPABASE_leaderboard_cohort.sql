@@ -57,7 +57,7 @@ RETURNS TABLE (
   accuracy_pct numeric
 )
 LANGUAGE plpgsql
-SECURITY INVOKER
+SECURITY DEFINER
 SET search_path = public
 AS $$
 #variable_conflict use_column
@@ -131,7 +131,7 @@ BEGIN
 END;
 $$;
 
--- SECURITY INVOKER（Lint 0029 対応）。authenticated は /ranking の RPC に必須
+-- SECURITY DEFINER（コホート集計に必要）。Lint 0029 は出るが意図的。authenticated は RPC に必須
 REVOKE ALL ON FUNCTION public.leaderboard_cohort(text, text) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.leaderboard_cohort(text, text) FROM anon;
 GRANT EXECUTE ON FUNCTION public.leaderboard_cohort(text, text) TO authenticated;

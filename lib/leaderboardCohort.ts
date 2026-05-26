@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { leaderboardApiFetch } from "./leaderboardApiClient";
 
-/** leaderboard_cohort RPC の1行 */
+/** ランキング API の1行 */
 export type LeaderboardRpcRow = {
   rank: number;
   user_id: string;
@@ -18,28 +19,17 @@ export async function fetchLeaderboardCohort(
   supabase: SupabaseClient,
   opts: { p_affiliation: string | null; p_grade: string | null }
 ): Promise<{ rows: LeaderboardRpcRow[]; error: Error | null }> {
-  const { data, error } = await supabase.rpc("leaderboard_cohort", {
-    p_affiliation: opts.p_affiliation,
-    p_grade: opts.p_grade,
-  });
+  const params = new URLSearchParams();
+  if (opts.p_affiliation) params.set("affiliation", opts.p_affiliation);
+  if (opts.p_grade) params.set("grade", opts.p_grade);
+  const q = params.toString();
+  const path = q ? `/api/leaderboard/cohort?${q}` : "/api/leaderboard/cohort";
+
+  const { json, error } = await leaderboardApiFetch(supabase, path);
   if (error) {
     return { rows: [], error };
   }
-  const list = (data ?? []) as Array<{
-    rank: number;
-    user_id: string;
-    display_name: string;
-    total_answered: number;
-    total_correct: number;
-    accuracy_pct: number;
-  }>;
-  const rows: LeaderboardRpcRow[] = list.map((r) => ({
-    rank: Number(r.rank),
-    user_id: r.user_id,
-    display_name: r.display_name,
-    total_answered: Number(r.total_answered),
-    total_correct: Number(r.total_correct),
-    accuracy_pct: Number(r.accuracy_pct),
-  }));
+
+  const rows = (json as { rows?: LeaderboardRpcRow[] }).rows ?? [];
   return { rows, error: null };
 }

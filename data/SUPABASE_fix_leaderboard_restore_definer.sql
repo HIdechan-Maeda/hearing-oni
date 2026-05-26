@@ -1,5 +1,7 @@
--- 非推奨: INVOKER だとランキングが RLS 42501 で失敗することがある
--- 代わりに data/SUPABASE_fix_leaderboard_restore_definer.sql を実行すること
+-- ランキング RPC を SECURITY DEFINER に戻す（RLS 42501 修復）
+-- INVOKER では profiles / logs のコホート集計が RLS で失敗することがある
+-- Lint 0029 は出るが、関数内で所属・学年を限定しているため意図的に DEFINER を維持
+-- 1行目から末尾までコピーして Run
 
 CREATE OR REPLACE FUNCTION public.leaderboard_cohort(
   p_affiliation text DEFAULT NULL,
@@ -14,7 +16,7 @@ RETURNS TABLE (
   accuracy_pct numeric
 )
 LANGUAGE plpgsql
-SECURITY INVOKER
+SECURITY DEFINER
 SET search_path = public
 AS $$
 #variable_conflict use_column
@@ -99,7 +101,7 @@ RETURNS TABLE (
   accuracy_pct numeric
 )
 LANGUAGE plpgsql
-SECURITY INVOKER
+SECURITY DEFINER
 SET search_path = public
 AS $$
 #variable_conflict use_column

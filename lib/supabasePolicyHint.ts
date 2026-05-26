@@ -36,19 +36,18 @@ export function supabaseProfileErrorHints(message: string): string {
   return s;
 }
 
-/** leaderboard_cohort RPC 失敗時（関数未作成・RLS・スキーマキャッシュ） */
+/** ランキング API / private RPC 失敗時 */
 export function supabaseLeaderboardRpcHint(message: string): string {
   let s = "";
-  if (/function|does not exist|PGRST202|schema cache|42883/i.test(message)) {
+  if (/function|does not exist|PGRST202|schema cache|42883|leaderboard_failed/i.test(message)) {
     s +=
-      " SQL Editor で data/SUPABASE_leaderboard_cohort.sql（および所属全体用なら data/SUPABASE_leaderboard_affiliation.sql）を実行し、必要なら Dashboard → Settings → API でスキーマを再読み込みしてください。";
+      " Supabase SQL Editor で data/SUPABASE_leaderboard_private_schema.sql を実行してください。Vercel に SUPABASE_SERVICE_ROLE_KEY があるかも確認してください。";
   }
-  if (/permission denied for function\s+(leaderboard_cohort|leaderboard_affiliation)/i.test(message)) {
-    s +=
-      " Supabase SQL Editor で data/SUPABASE_fix_leaderboard_grants.sql を実行し、authenticated に EXECUTE を付け直してください（anon には付与しない）。";
-  } else if (/row-level security|permission denied|42501|relation\s+\"logs\"|table\s+logs/i.test(message)) {
-    s +=
-      " 同じ SQL を再実行し、関数内の set_config('row_security','off') が入っているか確認してください（logs の RLS で失敗することがあります）。権限エラーの場合は data/SUPABASE_fix_leaderboard_grants.sql も実行してください。";
+  if (/server_misconfigured|503/i.test(message)) {
+    s += " Vercel の Environment Variables に SUPABASE_SERVICE_ROLE_KEY を設定し、再デプロイしてください。";
+  }
+  if (/unauthorized|401/i.test(message)) {
+    s += " 一度ログアウトしてから再ログインしてください。";
   }
   return s;
 }
