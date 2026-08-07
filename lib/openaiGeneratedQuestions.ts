@@ -83,6 +83,45 @@ function isNonEmpty(s: unknown): s is string {
   return typeof s === "string" && s.trim().length > 0;
 }
 
+const KEYWORD_SEARCH_COLUMNS = [
+  "stem",
+  "choice_a",
+  "choice_b",
+  "choice_c",
+  "choice_d",
+  "choice_e",
+  "explain",
+  "tags_raw",
+] as const;
+
+/** PostgREST `or=(col.ilike.%term%,...)` 用。term は予め sanitize 済み想定。 */
+function buildIlikeOrFilterForTerms(terms: string[]): string {
+  const parts: string[] = [];
+  for (const term of terms) {
+    // カンマは or 区切りと衝突するため除外済みのはずだが念のため
+    const t = term.replace(/,/g, " ").trim();
+    if (!t) continue;
+    for (const col of KEYWORD_SEARCH_COLUMNS) {
+      parts.push(`${col}.ilike.%${t}%`);
+    }
+  }
+  return parts.join(",");
+}
+
+function uniqueTermsFromAst(ast: KeywordQueryAst): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const group of ast.orGroups) {
+    for (const term of group) {
+      const key = term.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(term);
+    }
+  }
+  return out;
+}
+
 export async function loadExampleQuestionsForGeneration(
   admin: SupabaseClient,
   opts: {
@@ -104,16 +143,28 @@ export async function loadExampleQuestionsForGeneration(
 
   let q = admin
     .from("questions_core")
-    .select("id,stem,choice_a,choice_b,choice_c,choice_d,choice_e,answer,explain,tags_raw")
-    .limit(pool);
+    .select("id,stem,choice_a,choice_b,choice_c,choice_d,choice_e,answer,explain,tags_raw");
 
   const domainHint = opts.domainKey ? DOMAIN_TAG_FILTER[opts.domainKey] : null;
-  if (domainHint) {
+  // キーワード検索時は領域の tags 絞りを掛けない（onkyo など domain 表記ゆれで取りこぼすため）。
+  // 領域は「キーワードなし」のときだけ tags_raw ILIKE で絞る。
+  if (domainHint && !keywordAst) {
     q = q.ilike("tags_raw", `%${domainHint}%`);
   }
-  // キーワード横断検索があるときは tags_raw 単独の ILIKE に頼らず、取得後に全文照合する
   if (opts.tagsRawContains && !keywordAst) {
     q = q.ilike("tags_raw", `%${opts.tagsRawContains}%`);
+  }
+
+  if (keywordAst) {
+    const terms = uniqueTermsFromAst(keywordAst);
+    const orFilter = buildIlikeOrFilterForTerms(terms);
+    if (orFilter) {
+      q = q.or(orFilter);
+    }
+    // キーワード一致行を優先して多めに取る（その後 AND/OR をメモリで確定）
+    q = q.limit(Math.min(Math.max(pool, 500), 2000));
+  } else {
+    q = q.limit(pool);
   }
 
   const { data, error } = await q;
@@ -136,6 +187,8 @@ export async function loadExampleQuestionsForGeneration(
     usable = usable.filter((r) => (r.tags_raw ?? "").toLowerCase().includes(tagNeedle));
   }
 
+  // 領域指定 + キーワード時は、ドメインヒントを「あれば優先」ではなく緩めに再フィルタ
+  // （tags に acoustics が無く onkyo のみの行も残すため、キーワード一致を優先し domain は任意）
   if (keywordAst) {
     usable = usable.filter((r) => textMatchesKeywordQuery(buildQuestionSearchHaystack(r), keywordAst));
   }

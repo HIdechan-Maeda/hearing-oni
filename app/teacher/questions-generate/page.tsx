@@ -212,7 +212,7 @@ export default function TeacherQuestionsGeneratePage() {
               style={{ width: "100%", padding: 8, fontSize: 14, boxSizing: "border-box" }}
             />
             <p style={{ fontSize: 12, color: "#555", margin: "6px 0 0", lineHeight: 1.5 }}>
-              問題文・選択肢・tags_raw・解説を横断検索します。
+              問題文・選択肢・tags_raw・解説を DB 横断検索します（キーワード指定時は領域の tags 絞りを掛けません）。
               <br />
               <code>OR</code> / <code>|</code> / <code>または</code>（いずれか）　
               <code>AND</code> / <code>&amp;</code> / <code>かつ</code>（すべて）　
