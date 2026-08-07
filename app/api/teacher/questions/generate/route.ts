@@ -31,6 +31,7 @@ type GenerateBody = {
   exampleCount?: number;
   /** questions_core から読む最大行数（その中からシャッフルして参考例を選ぶ） */
   fetchPool?: number;
+  /** @deprecated 保存は /api/teacher/questions/save を使う。無視される。 */
   persist?: boolean;
 };
 
@@ -42,6 +43,10 @@ function sanitizeContentKeywordsInput(raw: string | null | undefined): string | 
   return s.length ? s : null;
 }
 
+/**
+ * 問題を生成してプレビュー用に返す（DB には保存しない）。
+ * 保存は POST /api/teacher/questions/save で、確認後に行う。
+ */
 export async function POST(req: Request) {
   const authResult = await requireTeacherFromBearer(req);
   if (!authResult.ok) return authResult.response;
@@ -63,7 +68,6 @@ export async function POST(req: Request) {
   const count = Math.min(Math.max(Number(body.count ?? 1), 1), 8);
   const exampleCount = Math.min(Math.max(Number(body.exampleCount ?? 4), 1), 20);
   const fetchPool = Math.min(Math.max(Number(body.fetchPool ?? 1200), 50), 2000);
-  const persist = Boolean(body.persist);
 
   const tagsRawContains = sanitizeTagsRawHintInput(body.tagsRawContains ?? null);
   const tagsRawOutputExplicit = sanitizeTagsRawHintInput(body.tagsRawOutputHint ?? null);
@@ -124,20 +128,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "openai_failed", message: msg }, { status: 502 });
   }
 
-  type RowOut = {
-    id: string;
-    stem: string;
-    choice_a: string;
-    choice_b: string;
-    choice_c: string;
-    choice_d: string;
-    choice_e: string;
-    answer: string;
-    explain: string | null;
-    tags_raw: string | null;
-  };
-
-  const validated: Array<{ draft: GeneratedQuestionDraft; valid: boolean; reason?: string; row?: RowOut }> = [];
+  const validated: Array<{
+    draft: GeneratedQuestionDraft;
+    valid: boolean;
+    reason?: string;
+    idSuggested?: string;
+  }> = [];
 
   for (const draft of drafts) {
     const v = validateGeneratedDraft(draft);
@@ -145,81 +141,26 @@ export async function POST(req: Request) {
       validated.push({ draft, valid: false, reason: v.reason });
       continue;
     }
-    const answer = normalizeAnswerForDb(draft);
-    const id = `ai-${randomUUID()}`;
+    // プレビュー用の仮 ID（保存時に再採番）
+    const idSuggested = `ai-${randomUUID()}`;
+    // answer 正規化は保存時に再実行するが、プレビューでも見やすいよう draft.answer を揃える
+    const normalized = normalizeAnswerForDb(draft);
     validated.push({
-      draft,
+      draft: { ...draft, answer: normalized },
       valid: true,
-      row: {
-        id,
-        stem: draft.stem.trim(),
-        choice_a: draft.choice_a.trim(),
-        choice_b: draft.choice_b.trim(),
-        choice_c: draft.choice_c.trim(),
-        choice_d: draft.choice_d.trim(),
-        choice_e: draft.choice_e.trim(),
-        answer,
-        explain: draft.explain?.trim() || null,
-        tags_raw: draft.tags_raw?.trim() || null,
-      },
+      idSuggested,
     });
   }
 
-  const insertedIds: string[] = [];
-  const examplesUsed = examples.map((e) => ({
-    id: e.id,
-    tags_raw: e.tags_raw,
-    stem: (e.stem ?? "").slice(0, 120),
-  }));
-
-  if (persist) {
-    const rows = validated.map((x) => x.row).filter((r): r is RowOut => Boolean(r));
-    if (rows.length === 0) {
-      return NextResponse.json(
-        {
-          error: "nothing_to_insert",
-          examplesUsed,
-          matchedPoolSize,
-          keywordParsed: keywordAst ? keywordQueryToDisplay(keywordAst) : null,
-          results: validated.map(({ draft, valid, reason }) => ({ draft, valid, reason })),
-        },
-        { status: 400 }
-      );
-    }
-
-    const { error: insErr } = await admin.from("questions_core").insert(rows);
-    if (insErr) {
-      return NextResponse.json(
-        {
-          error: "insert_failed",
-          message: insErr.message,
-          examplesUsed,
-          matchedPoolSize,
-          keywordParsed: keywordAst ? keywordQueryToDisplay(keywordAst) : null,
-          results: validated.map(({ draft, valid, reason, row }) => ({
-            draft,
-            valid,
-            reason,
-            idSuggested: row?.id,
-          })),
-        },
-        { status: 500 }
-      );
-    }
-    for (const r of rows) insertedIds.push(r.id);
-  }
-
   return NextResponse.json({
-    examplesUsed,
+    examplesUsed: examples.map((e) => ({
+      id: e.id,
+      tags_raw: e.tags_raw,
+      stem: (e.stem ?? "").slice(0, 120),
+    })),
     matchedPoolSize,
     keywordParsed: keywordAst ? keywordQueryToDisplay(keywordAst) : null,
-    results: validated.map(({ draft, valid, reason, row }) => ({
-      draft,
-      valid,
-      reason,
-      idSuggested: row?.id,
-    })),
-    insertedIds,
-    persisted: persist && insertedIds.length > 0,
+    results: validated,
+    persisted: false,
   });
 }
