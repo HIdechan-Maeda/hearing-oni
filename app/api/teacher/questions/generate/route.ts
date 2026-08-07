@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { keywordQueryToDisplay } from "@/lib/keywordQuery";
 import {
   generateQuestionsWithOpenAI,
   isQuestionGenerateDomainKey,
@@ -21,12 +22,25 @@ type GenerateBody = {
   tagsRawContains?: string | null;
   /** 生成する問題の tags_raw の目安。省略時は tagsRawContains があればそれを流用 */
   tagsRawOutputHint?: string | null;
+  /**
+   * 問題文・選択肢・tags・解説を横断するキーワード（OR/AND 可）
+   * 例: 聴覚フィルタ OR 臨界帯域幅
+   */
+  contentKeywords?: string | null;
   count?: number;
   exampleCount?: number;
   /** questions_core から読む最大行数（その中からシャッフルして参考例を選ぶ） */
   fetchPool?: number;
   persist?: boolean;
 };
+
+const MAX_CONTENT_KEYWORDS_LEN = 400;
+
+function sanitizeContentKeywordsInput(raw: string | null | undefined): string | null {
+  if (raw == null) return null;
+  const s = String(raw).normalize("NFKC").trim().slice(0, MAX_CONTENT_KEYWORDS_LEN);
+  return s.length ? s : null;
+}
 
 export async function POST(req: Request) {
   const authResult = await requireTeacherFromBearer(req);
@@ -53,7 +67,8 @@ export async function POST(req: Request) {
 
   const tagsRawContains = sanitizeTagsRawHintInput(body.tagsRawContains ?? null);
   const tagsRawOutputExplicit = sanitizeTagsRawHintInput(body.tagsRawOutputHint ?? null);
-  const tagsRawOutputHint = tagsRawOutputExplicit ?? tagsRawContains;
+  const contentKeywords = sanitizeContentKeywordsInput(body.contentKeywords ?? null);
+  const tagsRawOutputHint = tagsRawOutputExplicit ?? tagsRawContains ?? contentKeywords;
 
   const admin = createSupabaseAdmin();
   if (!admin) {
@@ -61,13 +76,19 @@ export async function POST(req: Request) {
   }
 
   let examples;
+  let keywordAst;
+  let matchedPoolSize = 0;
   try {
-    examples = await loadExampleQuestionsForGeneration(admin, {
+    const loaded = await loadExampleQuestionsForGeneration(admin, {
       domainKey,
       tagsRawContains,
+      contentKeywordQuery: contentKeywords,
       sampleSize: exampleCount,
       fetchPool,
     });
+    examples = loaded.examples;
+    keywordAst = loaded.keywordAst;
+    matchedPoolSize = loaded.matchedPoolSize;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ error: "examples_fetch_failed", message: msg }, { status: 500 });
@@ -78,11 +99,16 @@ export async function POST(req: Request) {
       {
         error: "no_examples",
         message:
-          "参考にする既存問題が取得できませんでした。questions_core にデータがあるか、領域・tags_raw 絞り込みを満たす行があるか、fetch_pool を大きくできるか確認してください。",
+          "参考にする既存問題が取得できませんでした。keywords（OR/AND）・領域・tags_raw・参照プールを見直してください。" +
+          (contentKeywords ? ` キーワード「${contentKeywords}」に一致する行がプール内にありません。` : ""),
+        matchedPoolSize,
+        keywordParsed: keywordAst ? keywordQueryToDisplay(keywordAst) : null,
       },
       { status: 400 }
     );
   }
+
+  const topicFocus = keywordAst ? keywordQueryToDisplay(keywordAst) : contentKeywords;
 
   let drafts: GeneratedQuestionDraft[];
   try {
@@ -90,6 +116,7 @@ export async function POST(req: Request) {
       examples,
       domainKey,
       tagsRawOutputHint,
+      topicFocus,
       count,
     });
   } catch (e) {
@@ -139,6 +166,11 @@ export async function POST(req: Request) {
   }
 
   const insertedIds: string[] = [];
+  const examplesUsed = examples.map((e) => ({
+    id: e.id,
+    tags_raw: e.tags_raw,
+    stem: (e.stem ?? "").slice(0, 120),
+  }));
 
   if (persist) {
     const rows = validated.map((x) => x.row).filter((r): r is RowOut => Boolean(r));
@@ -146,7 +178,9 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error: "nothing_to_insert",
-          examplesUsed: examples.map((e) => ({ id: e.id, tags_raw: e.tags_raw })),
+          examplesUsed,
+          matchedPoolSize,
+          keywordParsed: keywordAst ? keywordQueryToDisplay(keywordAst) : null,
           results: validated.map(({ draft, valid, reason }) => ({ draft, valid, reason })),
         },
         { status: 400 }
@@ -159,7 +193,9 @@ export async function POST(req: Request) {
         {
           error: "insert_failed",
           message: insErr.message,
-          examplesUsed: examples.map((e) => ({ id: e.id, tags_raw: e.tags_raw })),
+          examplesUsed,
+          matchedPoolSize,
+          keywordParsed: keywordAst ? keywordQueryToDisplay(keywordAst) : null,
           results: validated.map(({ draft, valid, reason, row }) => ({
             draft,
             valid,
@@ -174,7 +210,9 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({
-    examplesUsed: examples.map((e) => ({ id: e.id, tags_raw: e.tags_raw })),
+    examplesUsed,
+    matchedPoolSize,
+    keywordParsed: keywordAst ? keywordQueryToDisplay(keywordAst) : null,
     results: validated.map(({ draft, valid, reason, row }) => ({
       draft,
       valid,

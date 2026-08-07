@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { formatSupabaseError, supabaseProfileErrorHints } from "@/lib/supabasePolicyHint";
 import type { GeneratedQuestionDraft, QuestionGenerateDomainKey } from "@/lib/openaiGeneratedQuestions";
+import { keywordQueryToDisplay, parseKeywordQuery } from "@/lib/keywordQuery";
 
 const DOMAIN_OPTIONS: Array<{ key: QuestionGenerateDomainKey | ""; label: string }> = [
   { key: "", label: "指定なし（既存プールから参考例を選ぶ）" },
@@ -35,7 +36,9 @@ type ApiResultRow = {
 type GenerateResponse = {
   error?: string;
   message?: string;
-  examplesUsed?: Array<{ id: string; tags_raw: string | null }>;
+  examplesUsed?: Array<{ id: string; tags_raw: string | null; stem?: string }>;
+  matchedPoolSize?: number;
+  keywordParsed?: string | null;
   results?: ApiResultRow[];
   insertedIds?: string[];
   persisted?: boolean;
@@ -48,6 +51,7 @@ export default function TeacherQuestionsGeneratePage() {
   const [busy, setBusy] = useState(false);
 
   const [domainKey, setDomainKey] = useState<QuestionGenerateDomainKey | "">("");
+  const [contentKeywords, setContentKeywords] = useState("");
   const [tagsRawContains, setTagsRawContains] = useState("");
   const [tagsRawOutputHint, setTagsRawOutputHint] = useState("");
   const [count, setCount] = useState(2);
@@ -56,6 +60,11 @@ export default function TeacherQuestionsGeneratePage() {
   const [persist, setPersist] = useState(false);
 
   const [lastResponse, setLastResponse] = useState<GenerateResponse | null>(null);
+
+  const keywordPreview = useMemo(() => {
+    const ast = parseKeywordQuery(contentKeywords);
+    return ast ? keywordQueryToDisplay(ast) : null;
+  }, [contentKeywords]);
 
   const load = useCallback(async () => {
     setMsg("");
@@ -111,6 +120,7 @@ export default function TeacherQuestionsGeneratePage() {
       persist,
     };
     if (domainKey) body.domainKey = domainKey;
+    if (contentKeywords.trim()) body.contentKeywords = contentKeywords.trim();
     if (tagsRawContains.trim()) body.tagsRawContains = tagsRawContains.trim();
     if (tagsRawOutputHint.trim()) body.tagsRawOutputHint = tagsRawOutputHint.trim();
 
@@ -174,7 +184,7 @@ export default function TeacherQuestionsGeneratePage() {
           <li>
             <code>OPENAI_QUESTION_MODEL</code> を一段上のモデルにすると改善することがあります（料金・TPM に注意）。
           </li>
-          <li>参考例を「良問だけ」に近づける（領域・tags_raw・参照プールで母集団を調整）。</li>
+          <li>参考例を「良問だけ」に近づける（キーワード・領域・tags_raw・参照プールで母集団を調整）。</li>
           <li>保存前に stem / 誤答肢のリアリティ / 解説の根拠を人間が手直しする前提が安全です。</li>
         </ul>
       </aside>
@@ -191,7 +201,35 @@ export default function TeacherQuestionsGeneratePage() {
           )}
 
           <section style={{ marginTop: 16, maxWidth: 640 }}>
-            <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>領域（参考例の絞り込み）</label>
+            <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>
+              キーワード（類題の焦点・参考例検索）
+            </label>
+            <input
+              type="text"
+              value={contentKeywords}
+              onChange={(e) => setContentKeywords(e.target.value)}
+              placeholder="例: 聴覚フィルタ OR 臨界帯域幅"
+              style={{ width: "100%", padding: 8, fontSize: 14, boxSizing: "border-box" }}
+            />
+            <p style={{ fontSize: 12, color: "#555", margin: "6px 0 0", lineHeight: 1.5 }}>
+              問題文・選択肢・tags_raw・解説を横断検索します。
+              <br />
+              <code>OR</code> / <code>|</code> / <code>または</code>（いずれか）　
+              <code>AND</code> / <code>&amp;</code> / <code>かつ</code>（すべて）　
+              カンマ区切りは OR 扱い。
+              <br />
+              例: <code>聴覚フィルタ OR 臨界帯域幅</code>　
+              <code>マスキング AND 臨界帯域</code>
+            </p>
+            {keywordPreview && (
+              <p style={{ fontSize: 12, color: "#0b315b", margin: "6px 0 0" }}>
+                解釈: <code>{keywordPreview}</code>
+              </p>
+            )}
+          </section>
+
+          <section style={{ marginTop: 16, maxWidth: 640 }}>
+            <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>領域（参考例の絞り込み・任意）</label>
             <select
               value={domainKey}
               onChange={(e) => setDomainKey((e.target.value || "") as QuestionGenerateDomainKey | "")}
@@ -207,17 +245,17 @@ export default function TeacherQuestionsGeneratePage() {
 
           <section style={{ marginTop: 16, maxWidth: 640 }}>
             <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>
-              tags_raw に含む文字列（任意・参考例の絞り込み）
+              tags_raw に含む文字列（任意・追加フィルタ）
             </label>
             <input
               type="text"
               value={tagsRawContains}
               onChange={(e) => setTagsRawContains(e.target.value)}
-              placeholder="例: audiometry / screening / 補聴器 など（部分一致）"
+              placeholder="例: acoustics / psychoacoustics（キーワードと併用可）"
               style={{ width: "100%", padding: 8, fontSize: 14, boxSizing: "border-box" }}
             />
             <p style={{ fontSize: 12, color: "#555", margin: "6px 0 0" }}>
-              領域を選んだ場合と<strong>両方</strong>入れると、両方を満たす行だけが参考例になります。
+              キーワードがあるときは全文検索が主で、ここは tags_raw の追加条件になります。
             </p>
           </section>
 
@@ -229,7 +267,7 @@ export default function TeacherQuestionsGeneratePage() {
               type="text"
               value={tagsRawOutputHint}
               onChange={(e) => setTagsRawOutputHint(e.target.value)}
-              placeholder="空なら上の「含む文字列」を目安に使います。別表記にしたいときだけ入力"
+              placeholder="空ならキーワードまたは tags フィルタを目安に使います"
               style={{ width: "100%", padding: 8, fontSize: 14, boxSizing: "border-box" }}
             />
           </section>
@@ -258,7 +296,10 @@ export default function TeacherQuestionsGeneratePage() {
               />
             </div>
             <div>
-              <label style={{ display: "block", marginBottom: 4, fontWeight: 600 }} title="questions_core から読む最大行数（その中からシャッフルして参考例を選ぶ）">
+              <label
+                style={{ display: "block", marginBottom: 4, fontWeight: 600 }}
+                title="questions_core から読む最大行数（その中からシャッフルして参考例を選ぶ）"
+              >
                 参照プール（行）
               </label>
               <input
@@ -296,13 +337,23 @@ export default function TeacherQuestionsGeneratePage() {
             {busy ? "生成中…" : persist ? "生成して保存" : "生成のみ（プレビュー）"}
           </button>
 
+          {lastResponse?.keywordParsed && (
+            <p style={{ fontSize: 13, marginTop: 16 }}>
+              キーワード解釈: <code>{lastResponse.keywordParsed}</code>
+              {typeof lastResponse.matchedPoolSize === "number" ? (
+                <>（一致候補 {lastResponse.matchedPoolSize} 件から参考例を抽出）</>
+              ) : null}
+            </p>
+          )}
+
           {lastResponse?.examplesUsed && lastResponse.examplesUsed.length > 0 && (
             <section style={{ marginTop: 24 }}>
-              <h2 style={{ fontSize: 16 }}>使用した参考例（id / tags_raw）</h2>
+              <h2 style={{ fontSize: 16 }}>使用した参考例（id / tags / 問題文）</h2>
               <ul style={{ fontSize: 13 }}>
                 {lastResponse.examplesUsed.map((e) => (
-                  <li key={e.id}>
+                  <li key={e.id} style={{ marginBottom: 8 }}>
                     <code>{e.id}</code> — {e.tags_raw ?? "—"}
+                    {e.stem ? <div style={{ color: "#444", marginTop: 2 }}>{e.stem}</div> : null}
                   </li>
                 ))}
               </ul>
