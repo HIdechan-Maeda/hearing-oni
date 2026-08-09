@@ -562,6 +562,8 @@ export default function TeacherDashboardPage() {
         <Link href="/teacher/announcements">お知らせ（ホーム上部）</Link>
         {" · "}
         <Link href="/teacher/questions-generate">OpenAI 問題生成</Link>
+        {" · "}
+        <Link href="/teacher/x-post">X スレッド投稿</Link>
       </p>
       <p style={{ fontSize: 12, color: "#1a2d42", marginTop: 8, lineHeight: 1.55, maxWidth: 720 }}>
         選択した<strong>所属・学年</strong>の受講生について、解答ログをページ分割で集計し、領域別の正答率を表示します。
