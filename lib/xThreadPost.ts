@@ -4,6 +4,9 @@ import { resolveCorrectChoices } from "@/lib/questionChoices";
 
 const MAX_WEIGHTED = 270; // 標準280に余裕
 
+/** 投稿2末尾に付けるハッシュタグ（半角 #） */
+const TWEET2_HASHTAGS = "\n\n#言語聴覚士 #国試対策";
+
 export type XThreadPreview = {
   questionId: string;
   tweet1: string;
@@ -104,7 +107,9 @@ export function buildQuestionThreadTexts(q: QuestionCore): XThreadPreview {
   if (explain) {
     tweet2 += `\n\n解説: ${explain}`;
   }
-  tweet2 = truncateToTwitterWeight(tweet2, MAX_WEIGHTED);
+  const tagWeight = twitterWeightedLength(TWEET2_HASHTAGS);
+  tweet2 = truncateToTwitterWeight(tweet2, Math.max(20, MAX_WEIGHTED - tagWeight));
+  tweet2 += TWEET2_HASHTAGS;
 
   return {
     questionId: q.id,
@@ -115,21 +120,45 @@ export function buildQuestionThreadTexts(q: QuestionCore): XThreadPreview {
   };
 }
 
+const X_ENV_KEYS = [
+  "X_API_KEY",
+  "X_API_KEY_SECRET",
+  "X_ACCESS_TOKEN",
+  "X_ACCESS_TOKEN_SECRET",
+] as const;
+
+/** 実行時参照（静的置換を避ける）。値はログに出さない。 */
+function readXEnv(name: (typeof X_ENV_KEYS)[number]): string {
+  const env = process.env;
+  return String(env[name] ?? "").trim();
+}
+
+/** 値は返さない。どれが空かだけ返す（本番トラブルシュート用） */
+export function getMissingXEnvKeys(): string[] {
+  return X_ENV_KEYS.filter((k) => !readXEnv(k));
+}
+
+export function getXEnvPresence(): Record<(typeof X_ENV_KEYS)[number], boolean> {
+  return {
+    X_API_KEY: Boolean(readXEnv("X_API_KEY")),
+    X_API_KEY_SECRET: Boolean(readXEnv("X_API_KEY_SECRET")),
+    X_ACCESS_TOKEN: Boolean(readXEnv("X_ACCESS_TOKEN")),
+    X_ACCESS_TOKEN_SECRET: Boolean(readXEnv("X_ACCESS_TOKEN_SECRET")),
+  };
+}
+
 export function createXUserClient(): TwitterApi {
-  const appKey = (process.env.X_API_KEY ?? "").trim();
-  const appSecret = (process.env.X_API_KEY_SECRET ?? "").trim();
-  const accessToken = (process.env.X_ACCESS_TOKEN ?? "").trim();
-  const accessSecret = (process.env.X_ACCESS_TOKEN_SECRET ?? "").trim();
-  if (!appKey || !appSecret || !accessToken || !accessSecret) {
+  const missing = getMissingXEnvKeys();
+  if (missing.length > 0) {
     throw new Error(
-      "X API の環境変数が不足しています（X_API_KEY / X_API_KEY_SECRET / X_ACCESS_TOKEN / X_ACCESS_TOKEN_SECRET）。"
+      `X API の環境変数が不足しています（空または未設定: ${missing.join(", ")}）。Vercel で Production に保存したあと、Deployments → Redeploy（Build Cache なし）が必要です。`
     );
   }
   return new TwitterApi({
-    appKey,
-    appSecret,
-    accessToken,
-    accessSecret,
+    appKey: readXEnv("X_API_KEY"),
+    appSecret: readXEnv("X_API_KEY_SECRET"),
+    accessToken: readXEnv("X_ACCESS_TOKEN"),
+    accessSecret: readXEnv("X_ACCESS_TOKEN_SECRET"),
   });
 }
 

@@ -31,6 +31,17 @@ type PostResponse = {
   logWarning?: string | null;
   urls?: { tweet1: string; tweet2: string };
   preview?: Preview;
+  missingXEnv?: string[];
+};
+
+type EnvCheckResponse = {
+  ok?: boolean;
+  present?: Record<string, boolean>;
+  missing?: string[];
+  vercelEnv?: string | null;
+  deploymentId?: string | null;
+  error?: string;
+  message?: string;
 };
 
 async function bearer(): Promise<string | null> {
@@ -115,6 +126,39 @@ export default function TeacherXPostPage() {
     setMsg("プレビューを確認し、問題なければ「Xにスレッド投稿」を押してください。");
   };
 
+  const checkEnv = async () => {
+    setMsg("");
+    setBusy(true);
+    const token = await bearer();
+    if (!token) {
+      setBusy(false);
+      setMsg("セッションが無効です。再ログインしてください。");
+      return;
+    }
+    const res = await fetch("/api/teacher/x/env-check", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json = (await res.json().catch(() => ({}))) as EnvCheckResponse;
+    setBusy(false);
+    if (!res.ok) {
+      setMsg(json.message ?? json.error ?? `環境変数チェック失敗（HTTP ${res.status}）`);
+      return;
+    }
+    const lines = Object.entries(json.present ?? {}).map(
+      ([k, v]) => `${k}: ${v ? "あり" : "なし"}`
+    );
+    setMsg(
+      [
+        json.ok ? "X 環境変数は揃っています。" : "X 環境変数が不足しています（このデプロイ時点）。",
+        ...lines,
+        `VERCEL_ENV=${json.vercelEnv ?? "?"}`,
+        json.missing && json.missing.length > 0 ? `不足: ${json.missing.join(", ")}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n")
+    );
+  };
+
   const postThread = async () => {
     if (!preview) return;
     setMsg("");
@@ -133,7 +177,11 @@ export default function TeacherXPostPage() {
     const json = (await res.json().catch(() => ({}))) as PostResponse;
     setBusy(false);
     if (!res.ok) {
-      setMsg(json.message ?? json.error ?? `投稿失敗（HTTP ${res.status}）`);
+      const missing =
+        Array.isArray(json.missingXEnv) && json.missingXEnv.length > 0
+          ? `\n未設定: ${json.missingXEnv.join(", ")}`
+          : "";
+      setMsg((json.message ?? json.error ?? `投稿失敗（HTTP ${res.status}）`) + missing);
       return;
     }
     setLastUrls(json.urls ?? null);
@@ -152,7 +200,8 @@ export default function TeacherXPostPage() {
       </p>
       <p style={{ fontSize: 13, lineHeight: 1.55, maxWidth: 720, color: "#1a2d42" }}>
         1) 問題をピックアップしてプレビュー → 2) OKなら X にスレッド投稿。
-        URL誘導なし。投稿1＝問題＋選択肢、投稿2（返信）＝正答＋解説。
+        URL誘導なし。投稿1＝問題＋選択肢、投稿2（返信）＝正答＋解説＋
+        <code>#言語聴覚士 #国試対策</code>。
       </p>
       <aside
         style={{
@@ -194,6 +243,9 @@ export default function TeacherXPostPage() {
           </section>
 
           <div style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button type="button" disabled={busy} onClick={() => void checkEnv()} style={{ padding: "10px 16px" }}>
+              環境変数チェック
+            </button>
             <button type="button" disabled={busy} onClick={() => void pickQuestion()} style={{ padding: "10px 16px", fontWeight: 600 }}>
               {busy ? "処理中…" : "1. 問題をピックアップ"}
             </button>

@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { requireTeacherFromBearer } from "@/lib/requireTeacherFromBearer";
-import { buildQuestionThreadTexts, postQuestionThread } from "@/lib/xThreadPost";
+import {
+  buildQuestionThreadTexts,
+  getMissingXEnvKeys,
+  postQuestionThread,
+} from "@/lib/xThreadPost";
 import type { QuestionCore } from "@/types";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 type PostBody = {
   questionId?: string;
@@ -58,7 +63,15 @@ export async function POST(req: Request) {
     tweet2Id = posted.tweet2Id;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ error: "x_post_failed", message: msg }, { status: 502 });
+    const missingXEnv = getMissingXEnvKeys();
+    return NextResponse.json(
+      {
+        error: "x_post_failed",
+        message: msg,
+        ...(missingXEnv.length > 0 ? { missingXEnv } : {}),
+      },
+      { status: 502 }
+    );
   }
 
   const { error: logErr } = await admin.from("x_question_posts").upsert(
