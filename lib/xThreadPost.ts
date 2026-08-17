@@ -78,22 +78,27 @@ export function buildQuestionThreadTexts(q: QuestionCore): XThreadPreview {
 
   const header = "【聴覚の鬼】";
   const footer = "\n\n正答・解説はこのスレッドの続き👇";
+  const choicesText = lines.join("\n");
   let stem = (q.stem ?? "").trim().replace(/\s+/g, " ");
-  let body = `${header}\n${stem}\n\n${lines.join("\n")}${footer}`;
 
-  // はみ出す場合は選択肢を短く／問題文を短縮
+  const buildBody = (s: string) =>
+    s
+      ? `${header}\n${s}\n\n${choicesText}${footer}`
+      : `${header}\n\n${choicesText}${footer}`;
+
+  let body = buildBody(stem);
+
+  // はみ出す場合は「選択肢は残し、問題文を先に短縮」する
   if (twitterWeightedLength(body) > MAX_WEIGHTED) {
-    const shortChoices = lines.map((line) => truncateToTwitterWeight(line, 40));
-    body = `${header}\n${stem}\n\n${shortChoices.join("\n")}${footer}`;
+    const overhead = twitterWeightedLength(buildBody(""));
+    const stemBudget = MAX_WEIGHTED - overhead;
+    stem = stemBudget > 0 ? truncateToTwitterWeight(stem, stemBudget) : "";
+    body = buildBody(stem);
   }
+  // 選択肢自体が長すぎて収まらない場合のみ、最終手段で全体を切る
   if (twitterWeightedLength(body) > MAX_WEIGHTED) {
-    const budget =
-      MAX_WEIGHTED -
-      twitterWeightedLength(`${header}\n\n\n${lines.map((l) => truncateToTwitterWeight(l, 36)).join("\n")}${footer}`);
-    stem = truncateToTwitterWeight(stem, Math.max(20, budget));
-    body = `${header}\n${stem}\n\n${lines.map((l) => truncateToTwitterWeight(l, 36)).join("\n")}${footer}`;
+    body = truncateToTwitterWeight(body, MAX_WEIGHTED);
   }
-  body = truncateToTwitterWeight(body, MAX_WEIGHTED);
 
   const correct = resolveCorrectChoices(q);
   const answerParts = correct.map((L) => {
