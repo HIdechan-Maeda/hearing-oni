@@ -57,10 +57,12 @@ export async function POST(req: Request) {
 
   let tweet1Id: string;
   let tweet2Id: string;
+  let tweetIds: string[] = [];
   try {
     const posted = await postQuestionThread(preview);
     tweet1Id = posted.tweet1Id;
     tweet2Id = posted.tweet2Id;
+    tweetIds = posted.tweetIds;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     const missingXEnv = getMissingXEnvKeys();
@@ -90,6 +92,7 @@ export async function POST(req: Request) {
     questionId,
     tweet1Id,
     tweet2Id,
+    tweetIds,
     preview,
     logWarning: logErr
       ? `投稿は成功しましたが履歴保存に失敗: ${logErr.message}（SUPABASE_x_question_posts.sql を実行してください）`
@@ -97,6 +100,7 @@ export async function POST(req: Request) {
     urls: {
       tweet1: `https://x.com/i/web/status/${tweet1Id}`,
       tweet2: `https://x.com/i/web/status/${tweet2Id}`,
+      tweets: tweetIds.map((id) => `https://x.com/i/web/status/${id}`),
     },
   });
 }

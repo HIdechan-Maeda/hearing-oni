@@ -7,6 +7,7 @@ import { formatSupabaseError, supabaseProfileErrorHints } from "@/lib/supabasePo
 
 type Preview = {
   questionId: string;
+  tweets?: string[];
   tweet1: string;
   tweet2: string;
   stem: string;
@@ -28,8 +29,9 @@ type PostResponse = {
   ok?: boolean;
   tweet1Id?: string;
   tweet2Id?: string;
+  tweetIds?: string[];
   logWarning?: string | null;
-  urls?: { tweet1: string; tweet2: string };
+  urls?: { tweet1: string; tweet2: string; tweets?: string[] };
   preview?: Preview;
   missingXEnv?: string[];
 };
@@ -58,7 +60,7 @@ export default function TeacherXPostPage() {
   const [keyword, setKeyword] = useState("");
   const [preview, setPreview] = useState<Preview | null>(null);
   const [meta, setMeta] = useState<{ poolSize?: number; alreadyPostedCount?: number; note?: string | null }>({});
-  const [lastUrls, setLastUrls] = useState<{ tweet1: string; tweet2: string } | null>(null);
+  const [lastUrls, setLastUrls] = useState<string[] | null>(null);
 
   const load = useCallback(async () => {
     setMsg("");
@@ -184,7 +186,7 @@ export default function TeacherXPostPage() {
       setMsg((json.message ?? json.error ?? `投稿失敗（HTTP ${res.status}）`) + missing);
       return;
     }
-    setLastUrls(json.urls ?? null);
+    setLastUrls(json.urls?.tweets ?? (json.urls ? [json.urls.tweet1, json.urls.tweet2] : null));
     setMsg(
       json.logWarning
         ? `投稿成功。※${json.logWarning}`
@@ -200,8 +202,8 @@ export default function TeacherXPostPage() {
       </p>
       <p style={{ fontSize: 13, lineHeight: 1.55, maxWidth: 720, color: "#1a2d42" }}>
         1) 問題をピックアップしてプレビュー → 2) OKなら X にスレッド投稿。
-        URL誘導なし。投稿1＝問題＋選択肢、投稿2（返信）＝正答＋解説＋
-        <code>#言語聴覚士 #国試対策</code>。
+        URL誘導なし。収まるときは 問題＋選択肢 → 正答＋解説。長いときは 問題 → 選択肢 → 正答＋解説。
+        末尾に <code>#言語聴覚士 #国試対策</code>。
       </p>
       <aside
         style={{
@@ -278,26 +280,41 @@ export default function TeacherXPostPage() {
           {preview && (
             <section style={{ marginTop: 20, maxWidth: 640 }}>
               <h2 style={{ fontSize: 16 }}>プレビュー（id: {preview.questionId}）</h2>
-              <article style={{ marginTop: 10, padding: 12, border: "1px solid #ccc", borderRadius: 8, background: "#fff" }}>
-                <div style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>投稿1（問題）</div>
-                <pre style={{ whiteSpace: "pre-wrap", margin: 0, fontFamily: "inherit", fontSize: 14 }}>{preview.tweet1}</pre>
-              </article>
-              <article style={{ marginTop: 10, padding: 12, border: "1px solid #ccc", borderRadius: 8, background: "#f8fff8" }}>
-                <div style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>投稿2（続き＝正答・解説）</div>
-                <pre style={{ whiteSpace: "pre-wrap", margin: 0, fontFamily: "inherit", fontSize: 14 }}>{preview.tweet2}</pre>
-              </article>
+              {(preview.tweets && preview.tweets.length > 0 ? preview.tweets : [preview.tweet1, preview.tweet2]).map(
+                (text, i, arr) => {
+                  const labels2 = ["投稿1（問題＋選択肢）", "投稿2（正答・解説）"];
+                  const labels3 = ["投稿1（問題）", "投稿2（選択肢）", "投稿3（正答・解説）"];
+                  const label = (arr.length >= 3 ? labels3 : labels2)[i] ?? `投稿${i + 1}`;
+                  return (
+                    <article
+                      key={`${preview.questionId}-${i}`}
+                      style={{
+                        marginTop: 10,
+                        padding: 12,
+                        border: "1px solid #ccc",
+                        borderRadius: 8,
+                        background: i === arr.length - 1 ? "#f8fff8" : "#fff",
+                      }}
+                    >
+                      <div style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>{label}</div>
+                      <pre style={{ whiteSpace: "pre-wrap", margin: 0, fontFamily: "inherit", fontSize: 14 }}>{text}</pre>
+                    </article>
+                  );
+                }
+              )}
             </section>
           )}
 
-          {lastUrls && (
+          {lastUrls && lastUrls.length > 0 && (
             <p style={{ marginTop: 16, fontSize: 14 }}>
-              <a href={lastUrls.tweet1} target="_blank" rel="noreferrer">
-                投稿1を開く
-              </a>
-              {" · "}
-              <a href={lastUrls.tweet2} target="_blank" rel="noreferrer">
-                投稿2（続き）を開く
-              </a>
+              {lastUrls.map((url, i) => (
+                <span key={url}>
+                  {i > 0 ? " · " : null}
+                  <a href={url} target="_blank" rel="noreferrer">
+                    投稿{i + 1}を開く
+                  </a>
+                </span>
+              ))}
             </p>
           )}
         </>

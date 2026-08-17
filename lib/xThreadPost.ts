@@ -9,6 +9,8 @@ const TWEET2_HASHTAGS = "\n\n#言語聴覚士 #国試対策";
 
 export type XThreadPreview = {
   questionId: string;
+  /** 2本（問題+選択肢 / 正答）または 3本（問題 / 選択肢 / 正答） */
+  tweets: string[];
   tweet1: string;
   tweet2: string;
   stem: string;
@@ -62,10 +64,15 @@ function letterToNum(letter: string): string {
   return map[letter.toUpperCase()] ?? letter;
 }
 
+function fitTweet(text: string): string {
+  if (twitterWeightedLength(text) <= MAX_WEIGHTED) return text;
+  return truncateToTwitterWeight(text, MAX_WEIGHTED);
+}
+
 /**
  * スレッド用テキストを組み立てる。
- * 1投稿目: 問題+選択肢（正答なし）
- * 2投稿目: 正答+解説
+ * 収まるとき: 1=問題+選択肢 / 2=正答・解説
+ * 収まらないとき: 1=問題 / 2=選択肢 / 3=正答・解説（両方を切らない）
  */
 export function buildQuestionThreadTexts(q: QuestionCore): XThreadPreview {
   const letters = ["A", "B", "C", "D", "E"] as const;
@@ -77,28 +84,9 @@ export function buildQuestionThreadTexts(q: QuestionCore): XThreadPreview {
   }
 
   const header = "【聴覚の鬼】";
-  const footer = "\n\n正答・解説はこのスレッドの続き👇";
   const choicesText = lines.join("\n");
-  let stem = (q.stem ?? "").trim().replace(/\s+/g, " ");
-
-  const buildBody = (s: string) =>
-    s
-      ? `${header}\n${s}\n\n${choicesText}${footer}`
-      : `${header}\n\n${choicesText}${footer}`;
-
-  let body = buildBody(stem);
-
-  // はみ出す場合は「選択肢は残し、問題文を先に短縮」する
-  if (twitterWeightedLength(body) > MAX_WEIGHTED) {
-    const overhead = twitterWeightedLength(buildBody(""));
-    const stemBudget = MAX_WEIGHTED - overhead;
-    stem = stemBudget > 0 ? truncateToTwitterWeight(stem, stemBudget) : "";
-    body = buildBody(stem);
-  }
-  // 選択肢自体が長すぎて収まらない場合のみ、最終手段で全体を切る
-  if (twitterWeightedLength(body) > MAX_WEIGHTED) {
-    body = truncateToTwitterWeight(body, MAX_WEIGHTED);
-  }
+  const stem = (q.stem ?? "").trim().replace(/\s+/g, " ");
+  const combined = `${header}\n${stem}\n\n${choicesText}\n\n正答・解説はこのスレッドの続き👇`;
 
   const correct = resolveCorrectChoices(q);
   const answerParts = correct.map((L) => {
@@ -107,19 +95,29 @@ export function buildQuestionThreadTexts(q: QuestionCore): XThreadPreview {
     return t ? `${n}. ${t}` : n;
   });
   const answerLabel = answerParts.join(" / ") || String(q.answer ?? "");
-  let explain = (q.explain ?? "").trim().replace(/\s+/g, " ");
-  let tweet2 = `正答: ${answerLabel}`;
+  const explain = (q.explain ?? "").trim().replace(/\s+/g, " ");
+  let answerTweet = `正答: ${answerLabel}`;
   if (explain) {
-    tweet2 += `\n\n解説: ${explain}`;
+    answerTweet += `\n\n解説: ${explain}`;
   }
   const tagWeight = twitterWeightedLength(TWEET2_HASHTAGS);
-  tweet2 = truncateToTwitterWeight(tweet2, Math.max(20, MAX_WEIGHTED - tagWeight));
-  tweet2 += TWEET2_HASHTAGS;
+  answerTweet = truncateToTwitterWeight(answerTweet, Math.max(20, MAX_WEIGHTED - tagWeight));
+  answerTweet += TWEET2_HASHTAGS;
+
+  const tweets =
+    twitterWeightedLength(combined) <= MAX_WEIGHTED
+      ? [combined, answerTweet]
+      : [
+          fitTweet(`${header}\n${stem}\n\n選択肢はこのスレッドの続き👇`),
+          fitTweet(`${choicesText}\n\n正答・解説はこのスレッドの続き👇`),
+          answerTweet,
+        ];
 
   return {
     questionId: q.id,
-    tweet1: body,
-    tweet2,
+    tweets,
+    tweet1: tweets[0] ?? "",
+    tweet2: tweets[tweets.length - 1] ?? "",
     stem: q.stem ?? "",
     answerLabel,
   };
@@ -168,16 +166,25 @@ export function createXUserClient(): TwitterApi {
 }
 
 export async function postQuestionThread(preview: XThreadPreview): Promise<{
+  tweetIds: string[];
   tweet1Id: string;
   tweet2Id: string;
 }> {
   const client = createXUserClient();
   const rw = client.readWrite;
-  const t1 = await rw.v2.tweet({ text: preview.tweet1 });
-  const id1 = t1.data.id;
-  const t2 = await rw.v2.tweet({
-    text: preview.tweet2,
-    reply: { in_reply_to_tweet_id: id1 },
-  });
-  return { tweet1Id: id1, tweet2Id: t2.data.id };
+  const texts = preview.tweets.length > 0 ? preview.tweets : [preview.tweet1, preview.tweet2];
+  const tweetIds: string[] = [];
+  for (const text of texts) {
+    const posted = await rw.v2.tweet(
+      tweetIds.length === 0
+        ? { text }
+        : { text, reply: { in_reply_to_tweet_id: tweetIds[tweetIds.length - 1] } }
+    );
+    tweetIds.push(posted.data.id);
+  }
+  return {
+    tweetIds,
+    tweet1Id: tweetIds[0] ?? "",
+    tweet2Id: tweetIds[tweetIds.length - 1] ?? "",
+  };
 }
